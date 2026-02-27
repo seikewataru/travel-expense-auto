@@ -1,4 +1,4 @@
-"""CLIエントリポイント — auth / fetch / ex-fetch サブコマンド"""
+"""CLIエントリポイント — auth / fetch / ex-fetch / times-fetch サブコマンド"""
 
 import argparse
 import json
@@ -74,6 +74,14 @@ def main() -> None:
         "--dry-run", action="store_true", help="取得・表示のみ（書き込みなし）"
     )
 
+    # times-fetch サブコマンド
+    times_parser = sub.add_parser("times-fetch", help="タイムズカー利用明細CSV取得")
+    times_parser.add_argument("--year", type=int, required=True, help="対象年")
+    times_parser.add_argument("--month", type=int, required=True, help="対象月")
+    times_parser.add_argument(
+        "--dry-run", action="store_true", help="取得・表示のみ（書き込みなし）"
+    )
+
     args = parser.parse_args()
     if args.command == "auth":
         cmd_auth(args)
@@ -81,6 +89,8 @@ def main() -> None:
         cmd_fetch(args)
     elif args.command == "ex-fetch":
         cmd_ex_fetch(args)
+    elif args.command == "times-fetch":
+        cmd_times_fetch(args)
 
 
 def cmd_ex_fetch(args: argparse.Namespace) -> None:
@@ -95,6 +105,19 @@ def cmd_ex_fetch(args: argparse.Namespace) -> None:
     print(f"\n取得件数: {len(records)}件")
     if args.dry_run or True:  # Phase 1bでは常に表示のみ
         print(json.dumps(records, indent=2, ensure_ascii=False))
+
+
+def cmd_times_fetch(args: argparse.Namespace) -> None:
+    """タイムズカー利用明細CSV取得"""
+    from src.times_car import TimesCarClient
+
+    with TimesCarClient() as client:
+        client.login()
+        csv_path = client.download_csv(args.year, args.month)
+        records = client.parse_csv(csv_path)
+
+    print(f"\n取得件数: {len(records)}件")
+    print(json.dumps(records, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

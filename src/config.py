@@ -22,6 +22,13 @@ EX_CARD_NUMBER = os.getenv("EX_CARD_NUMBER", "")
 EX_PASSWORD = os.getenv("EX_PASSWORD", "")
 EX_OTP_EMAIL = os.getenv("EX_OTP_EMAIL", "backoffice@stmn.co.jp")
 
+# タイムズカー（法人管理者Web）
+TIMES_LOGIN_URL = os.getenv("TIMES_LOGIN_URL", "https://plus.timescar.jp/view/corporation/login.jsp")
+TIMES_CONTRACT_ID = os.getenv("TIMES_CONTRACT_ID", "")
+TIMES_EMAIL = os.getenv("TIMES_EMAIL", "")
+TIMES_PASSWORD = os.getenv("TIMES_PASSWORD", "")
+TIMES_BROWSER_PROFILE = Path(__file__).resolve().parent.parent / "data" / "times_browser_profile"
+
 # GCP サービスアカウント
 GCP_SERVICE_ACCOUNT_PATH = os.getenv(
     "GCP_SERVICE_ACCOUNT_PATH",
