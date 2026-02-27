@@ -29,6 +29,13 @@ TIMES_EMAIL = os.getenv("TIMES_EMAIL", "")
 TIMES_PASSWORD = os.getenv("TIMES_PASSWORD", "")
 TIMES_BROWSER_PROFILE = Path(__file__).resolve().parent.parent / "data" / "times_browser_profile"
 
+# Racco（楽天トラベル法人管理）
+RACCO_LOGIN_URL = os.getenv("RACCO_LOGIN_URL", "https://manage.travel.rakuten.co.jp/alcemng/mng/corpLogin")
+RACCO_CORP_ID = os.getenv("RACCO_CORP_ID", "")
+RACCO_USERNAME = os.getenv("RACCO_USERNAME", "")
+RACCO_PASSWORD = os.getenv("RACCO_PASSWORD", "")
+RACCO_BROWSER_PROFILE = Path(__file__).resolve().parent.parent / "data" / "racco_browser_profile"
+
 # GCP サービスアカウント
 GCP_SERVICE_ACCOUNT_PATH = os.getenv(
     "GCP_SERVICE_ACCOUNT_PATH",
