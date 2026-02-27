@@ -1,4 +1,4 @@
-"""CLIエントリポイント — auth / fetch サブコマンド"""
+"""CLIエントリポイント — auth / fetch / ex-fetch サブコマンド"""
 
 import argparse
 import json
@@ -66,11 +66,35 @@ def main() -> None:
         "--dry-run", action="store_true", help="取得のみ（書き込みなし）"
     )
 
+    # ex-fetch サブコマンド
+    ex_parser = sub.add_parser("ex-fetch", help="EXカード利用実績CSV取得")
+    ex_parser.add_argument("--year", type=int, required=True, help="対象年")
+    ex_parser.add_argument("--month", type=int, required=True, help="対象月")
+    ex_parser.add_argument(
+        "--dry-run", action="store_true", help="取得・表示のみ（書き込みなし）"
+    )
+
     args = parser.parse_args()
     if args.command == "auth":
         cmd_auth(args)
     elif args.command == "fetch":
         cmd_fetch(args)
+    elif args.command == "ex-fetch":
+        cmd_ex_fetch(args)
+
+
+def cmd_ex_fetch(args: argparse.Namespace) -> None:
+    """EXカード利用実績CSV取得"""
+    from src.ex_card import EXCardClient
+
+    with EXCardClient() as client:
+        client.login()
+        csv_path = client.download_csv(args.year, args.month)
+        records = client.parse_csv(csv_path)
+
+    print(f"\n取得件数: {len(records)}件")
+    if args.dry_run or True:  # Phase 1bでは常に表示のみ
+        print(json.dumps(records, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
