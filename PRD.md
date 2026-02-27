@@ -1,5 +1,5 @@
 # PRD: travel-expense-auto（出張旅費ROI可視化）
-> 規模: M ／ 最終更新: 2026-02-27 ／ ステータス: Draft
+> 規模: M ／ 最終更新: 2026-02-27 ／ ステータス: In Progress（Phase 0 完了）
 
 ## 1. 課題定義（Problem Statement）
 - 部署ごとに出張が増加しているが、その出張費が受注増に繋がっているかを月次で判定できていない
@@ -24,9 +24,9 @@
 ## 4. 機能要件（Functional Requirements）
 | ID | 機能 | 優先度 | 説明 |
 |----|------|--------|------|
-| F-1 | EXカードデータ取得 | Must | 法人契約EXカードから新幹線代を取得（API要調査） |
-| F-2 | MF経費データ取得 | Must | MF経費申請から在来線・新幹線代を取得（API要調査） |
-| F-3 | Raccoデータ取得 | Must | Raccoから宿泊費を取得（API要調査） |
+| F-1 | EXカードデータ取得 | Must | Playwrightで法人管理画面からCSV自動DL（公開APIなし） |
+| F-2 | MF経費データ取得 | Must | 公式REST API（OAuth 2.0）で経費明細を自動取得 |
+| F-3 | Raccoデータ取得 | Must | Playwrightで管理画面からCSV自動DL（公開APIなし） |
 | F-4 | 部署マスタ連携 | Must | スプレッドシートの部署マスタから個人→部署マッピング |
 | F-5 | 受注データ連携 | Must | スプレッドシートの受注実績を部署別に取得 |
 | F-6 | 個人別・部署別集計 | Must | 旅費を個人別→部署別に集計 |
@@ -39,36 +39,54 @@
 - **運用**: エラー時に担当者へ通知（方法は未定）
 
 ## 6. 技術仕様（Technical Specification）
-- **実行形態**: 未定（CLI / Web ダッシュボード — 要検討）
-- **技術スタック**: 未定（おまかせ）
+- **実行形態**: CLI（Python スクリプト、月次バッチ実行）
+- **技術スタック**: Python（requests / Playwright / gspread）
 - **データソース**:
-  - EXカード: API調査必要
-  - MF経費申請: API調査必要
-  - Racco: API調査必要
-  - Google Sheets（部署マスタ）: `1gL6ShZUta6vM_TOcx0VB10_sjb_lZ7ZX6o9V-5LL3yc`（要閲覧権限申請）
-  - Google Sheets（受注実績）: ソース未確認
-  - Google Sheets（出力先）: 参考 `1YWyDrpyHPq2MHoHeBHwQ2W-ouDg8Kqn7aW5vPLyMfzQ`
+  | ソース | 取得方法 | 技術 | 備考 |
+  |--------|---------|------|------|
+  | EXカード | Playwrightスクレイピング | 法人管理画面→CSV自動DL | 公開APIなし。規約注意、月1回最小限 |
+  | MF経費 | 公式REST API | OAuth 2.0 + requests | エンドポイント: `expense.moneyforward.com/api/external/v1/` |
+  | Racco | Playwrightスクレイピング | 管理画面→CSV自動DL | 公開APIなし。規約注意、月1回最小限 |
+  | Google Sheets（部署マスタ） | gspread | ID: `1gL6ShZUta6vM_TOcx0VB10_sjb_lZ7ZX6o9V-5LL3yc` | 要閲覧権限申請 |
+  | Google Sheets（受注実績） | gspread | ソース未確認 | |
+  | Google Sheets（出力先） | gspread | 参考: `1YWyDrpyHPq2MHoHeBHwQ2W-ouDg8Kqn7aW5vPLyMfzQ` | |
+- **認証情報管理**: `.env`ファイル（MF経費のOAuth、EXカード・Raccoのログイン情報、GCPサービスアカウント）
 
 ## 7. 制約事項（Constraints）
 - 部署マスタのスプレッドシートは閲覧権限がまだない（要申請）
-- 各データソースのAPIが存在するか未確認（最大のリスク）
+- EXカード・Raccoはスクレイピングのため、画面変更で壊れるリスクあり
+- EXカード・Raccoのスクレイピングは利用規約上グレー（月1回・最小限のアクセスに留める）
 - 締切: 2026年3月末
 
 ## 8. マイルストーン（Milestones）
-- [ ] Phase 0: API調査（EXカード・MF経費・Raccoの取得方法確定）
-- [ ] Phase 1: データ取得パイプライン構築（全ソース統合）
-- [ ] Phase 2: 部署別集計 + ROI算出ロジック
-- [ ] Phase 3: スプレッドシート出力 + 運用開始
+- [x] Phase 0: API調査（EXカード・MF経費・Raccoの取得方法確定）
+- [ ] Phase 1a: MF経費API接続（OAuth 2.0認証 + 経費明細取得）
+- [ ] Phase 1b: EXカード Playwrightスクレイパー
+- [ ] Phase 1c: Racco Playwrightスクレイパー
+- [ ] Phase 2: 部署マスタ連携 + 個人別・部署別集計 + ROI算出
+- [ ] Phase 3: スプレッドシート出力 + 月次自動実行
 
 ## 9. 未決事項（Open Questions）
-- [ ] Q1: EXカード（法人契約）のAPI or データエクスポート方法は？
-- [ ] Q2: MF経費申請のAPI取得は可能か？
-- [ ] Q3: RaccoのAPI or データエクスポート方法は？
+- [x] Q1: EXカード → 公開APIなし。法人管理画面からCSV DL可能。Playwrightで自動化
+- [x] Q2: MF経費 → 公式REST API あり（OAuth 2.0）。経費明細・従業員・部門取得可能
+- [x] Q3: Racco → 公開APIなし。管理画面からCSV DL可能。Playwrightで自動化
 - [ ] Q4: 部署マスタの閲覧権限はいつ取得できるか？
 - [ ] Q5: 受注データのソース・フォーマットの詳細は？
-- [ ] Q6: 実行形態（CLI vs Web）はどちらが適切か？
+- [x] Q6: 実行形態 → CLI（Pythonスクリプト、月次バッチ）
+- [ ] Q7: MF経費のAPI連携設定画面にアクセスできるか？（Client ID/Secret取得のため）
+- [ ] Q8: EXカード法人管理画面のURL・ログイン情報は？
+- [ ] Q9: Racco管理画面のURL・ログイン情報は？
 
 ## Changelog
+- **2026-02-27 v0.2（Phase 0 完了）**
+  - API調査完了。結果:
+    - MF経費: 公式REST API あり（OAuth 2.0）→ Python API直叩き
+    - EXカード: 公開APIなし、管理画面CSVのみ → Playwright自動DL
+    - Racco: 公開APIなし、管理画面CSVのみ → Playwright自動DL
+  - 技術スタック確定: Python（requests / Playwright / gspread）
+  - Yoom（導入済みiPaaS）も検討したが、EXカード・Racco非対応のため不採用
+  - Yoom vs Playwright vs API直叩きの3方式を比較し、ハイブリッド（API + Playwright）に決定
+  - 実行形態: CLI（月次バッチ）に決定
 - **2026-02-27 v0.1（初版）**
   - 当初の課題: 旅費交通費（EXカード・MF経費・Racco）の手動集計を自動化したい
   - ヒアリング中に目的が拡張: 単なる集計ではなく **出張旅費のROI判定** が本質と判明
