@@ -90,6 +90,14 @@ def main() -> None:
         "--dry-run", action="store_true", help="取得・表示のみ（書き込みなし）"
     )
 
+    # jalan-fetch サブコマンド
+    jalan_parser = sub.add_parser("jalan-fetch", help="じゃらん宿泊予約データCSV取得")
+    jalan_parser.add_argument("--year", type=int, required=True, help="対象年")
+    jalan_parser.add_argument("--month", type=int, required=True, help="対象月")
+    jalan_parser.add_argument(
+        "--dry-run", action="store_true", help="取得・表示のみ（書き込みなし）"
+    )
+
     args = parser.parse_args()
     if args.command == "auth":
         cmd_auth(args)
@@ -101,6 +109,8 @@ def main() -> None:
         cmd_times_fetch(args)
     elif args.command == "racco-fetch":
         cmd_racco_fetch(args)
+    elif args.command == "jalan-fetch":
+        cmd_jalan_fetch(args)
 
 
 def cmd_ex_fetch(args: argparse.Namespace) -> None:
@@ -135,6 +145,19 @@ def cmd_racco_fetch(args: argparse.Namespace) -> None:
     from src.racco import RaccoClient
 
     with RaccoClient() as client:
+        client.login()
+        csv_path = client.download_csv(args.year, args.month)
+        records = client.parse_csv(csv_path)
+
+    print(f"\n取得件数: {len(records)}件")
+    print(json.dumps(records, indent=2, ensure_ascii=False))
+
+
+def cmd_jalan_fetch(args: argparse.Namespace) -> None:
+    """じゃらん宿泊予約データCSV取得"""
+    from src.jalan import JalanClient
+
+    with JalanClient() as client:
         client.login()
         csv_path = client.download_csv(args.year, args.month)
         records = client.parse_csv(csv_path)

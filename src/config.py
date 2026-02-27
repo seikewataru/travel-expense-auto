@@ -36,6 +36,12 @@ RACCO_USERNAME = os.getenv("RACCO_USERNAME", "")
 RACCO_PASSWORD = os.getenv("RACCO_PASSWORD", "")
 RACCO_BROWSER_PROFILE = Path(__file__).resolve().parent.parent / "data" / "racco_browser_profile"
 
+# じゃらん（法人予約管理）
+JALAN_LOGIN_URL = os.getenv("JALAN_LOGIN_URL", "https://jcscl.jalan.net/jc/jcp9000/jcw9001Init.do")
+JALAN_CORP_ID = os.getenv("JALAN_CORP_ID", "")
+JALAN_PASSWORD = os.getenv("JALAN_PASSWORD", "")
+JALAN_BROWSER_PROFILE = Path(__file__).resolve().parent.parent / "data" / "jalan_browser_profile"
+
 # GCP サービスアカウント
 GCP_SERVICE_ACCOUNT_PATH = os.getenv(
     "GCP_SERVICE_ACCOUNT_PATH",
