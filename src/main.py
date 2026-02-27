@@ -33,9 +33,14 @@ def cmd_fetch(args: argparse.Namespace) -> None:
 
     office_id = offices[0]["id"]
 
-    # 経費明細を取得
+    # 経費明細を取得（月初〜月末）
+    recognized_from = f"{args.year}-{args.month:02d}-01"
+    if args.month == 12:
+        recognized_to = f"{args.year + 1}-01-01"
+    else:
+        recognized_to = f"{args.year}-{args.month + 1:02d}-01"
     print(f"\n経費明細を取得中... ({args.year}年{args.month}月)")
-    transactions = client.get_expense_transactions(office_id, args.year, args.month)
+    transactions = client.get_ex_transactions(office_id, recognized_from, recognized_to)
     print(f"取得件数: {len(transactions)}件")
 
     if args.dry_run:

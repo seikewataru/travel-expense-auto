@@ -41,7 +41,7 @@ class MFExpenseClient:
             "client_id": MF_CLIENT_ID,
             "redirect_uri": MF_REDIRECT_URI,
             "response_type": "code",
-            "scope": "office_setting:read expense_transaction:read",
+            "scope": "office_setting:write user_setting:write transaction:write report:write account:write public_resource:read",
         }
         auth_url = f"{MF_AUTH_URL}?{urlencode(params)}"
         print(f"ブラウザで認可URLを開きます:\n{auth_url}\n")
@@ -98,18 +98,22 @@ class MFExpenseClient:
         """事業者一覧を取得"""
         return self._get("/offices")["offices"]
 
-    def get_expense_transactions(
-        self, office_id: str, year: int, month: int
+    def get_ex_transactions(
+        self, office_id: str, recognized_at_from: str, recognized_at_to: str
     ) -> list[dict]:
         """経費明細を取得（ページネーション対応）"""
         all_transactions: list[dict] = []
         page = 1
         while True:
             data = self._get(
-                f"/offices/{office_id}/expense_transactions",
-                params={"page": page, "year": year, "month": month},
+                f"/offices/{office_id}/ex_transactions",
+                params={
+                    "page": page,
+                    "query_object[recognized_at_from]": recognized_at_from,
+                    "query_object[recognized_at_to]": recognized_at_to,
+                },
             )
-            transactions = data.get("expense_transactions", [])
+            transactions = data.get("ex_transactions", [])
             if not transactions:
                 break
             all_transactions.extend(transactions)
