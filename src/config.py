@@ -54,3 +54,15 @@ EX_BROWSER_PROFILE = EX_DATA_DIR / "ex_browser_profile"
 
 # トークン保存先
 MF_TOKEN_FILE = ".mf_tokens.json"
+
+# Google Sheets — 部署マスタ・出力先・EXカード管理
+DEPT_MASTER_SHEET_ID = "1gL6ShZUta6vM_TOcx0VB10_sjb_lZ7ZX6o9V-5LL3yc"
+OUTPUT_SHEET_ID = "1nJXQ2Wt7ilpcg_yktIxlaZvvaMvRf87B8dIALoyXbaA"
+EX_CARD_MASTER_SHEET_ID = "13fajhD-qWgerxdIJ31_6jfhajR1OJjm4XPamiFn-qjM"
+EX_CARD_MASTER_GID = 111917276  # EXカード管理シート
+
+# MF経費 事業者ID
+MF_OFFICE_IDS = {
+    "stamen": "3eX7QWyXMWfqh1UffaF7Ng",
+    "stage": "LzIfBpr3fz6OZfx5RZhdRw",
+}

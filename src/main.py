@@ -1,8 +1,9 @@
-"""CLIエントリポイント — auth / fetch / ex-fetch / times-fetch サブコマンド"""
+"""CLIエントリポイント — auth / fetch / ex-fetch / times-fetch / aggregate サブコマンド"""
 
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from src.mf_expense import MFExpenseClient
 
@@ -98,6 +99,17 @@ def main() -> None:
         "--dry-run", action="store_true", help="取得・表示のみ（書き込みなし）"
     )
 
+    # aggregate サブコマンド
+    agg_parser = sub.add_parser("aggregate", help="旅費集計（部署マスタ連携 → スプレッドシート出力）")
+    agg_parser.add_argument("--year", type=int, required=True, help="対象年")
+    agg_parser.add_argument("--month", type=int, required=True, help="対象月")
+    agg_parser.add_argument(
+        "--dry-run", action="store_true", help="集計結果を表示のみ（シート書き込みなし）"
+    )
+    agg_parser.add_argument(
+        "--skip-fetch", action="store_true", help="CSVの再取得をスキップ（data/内の既存CSVを使用）"
+    )
+
     args = parser.parse_args()
     if args.command == "auth":
         cmd_auth(args)
@@ -111,6 +123,8 @@ def main() -> None:
         cmd_racco_fetch(args)
     elif args.command == "jalan-fetch":
         cmd_jalan_fetch(args)
+    elif args.command == "aggregate":
+        cmd_aggregate(args)
 
 
 def cmd_ex_fetch(args: argparse.Namespace) -> None:
@@ -164,6 +178,139 @@ def cmd_jalan_fetch(args: argparse.Namespace) -> None:
 
     print(f"\n取得件数: {len(records)}件")
     print(json.dumps(records, indent=2, ensure_ascii=False))
+
+
+def cmd_aggregate(args: argparse.Namespace) -> None:
+    """旅費集計 — 部署マスタ連携 → カテゴリ別個人集計 → スプレッドシート出力"""
+    from src.config import EX_DATA_DIR, MF_OFFICE_IDS
+    from src.sheets_client import SheetsClient
+    from src.aggregator import ExpenseAggregator
+
+    year, month = args.year, args.month
+
+    # 1. マスタ読み込み（部署マスタ + EXカードマスタ）
+    print(f"=== 旅費集計 {year}年{month}月 ===\n")
+    sheets = SheetsClient()
+    dept_master = sheets.read_department_master(year, month)
+    ex_card_master, ex_card_exclude_ids = sheets.read_ex_card_master()
+
+    agg = ExpenseAggregator(dept_master, ex_card_master=ex_card_master, ex_card_exclude_ids=ex_card_exclude_ids)
+
+    # 2. 各ソースCSV取得（--skip-fetch なら既存CSVを使用）
+    data_dir = EX_DATA_DIR
+
+    # EXカード
+    ex_csv = data_dir / f"ex_{year}_{month:02d}.csv"
+    if not args.skip_fetch:
+        from src.ex_card import EXCardClient
+        print("\n--- EXカード取得 ---")
+        with EXCardClient() as client:
+            client.login()
+            ex_csv = client.download_csv(year, month)
+    if ex_csv.exists():
+        from src.ex_card import EXCardClient
+        ex_records = EXCardClient.parse_csv(ex_csv)
+        agg.add_ex_card(ex_records)
+        print(f"  EXカード: {len(ex_records)}件追加")
+    else:
+        print(f"  EXカード: CSVなし ({ex_csv})")
+
+    # タイムズカー
+    times_csv = data_dir / f"times_{year}_{month:02d}.csv"
+    if not args.skip_fetch:
+        from src.times_car import TimesCarClient
+        print("\n--- タイムズカー取得 ---")
+        with TimesCarClient() as client:
+            client.login()
+            times_csv = client.download_csv(year, month)
+    if times_csv.exists():
+        from src.times_car import TimesCarClient
+        times_records = TimesCarClient.parse_csv(times_csv)
+        agg.add_times_car(times_records)
+        print(f"  タイムズカー: {len(times_records)}件追加")
+    else:
+        print(f"  タイムズカー: CSVなし ({times_csv})")
+
+    # Racco
+    racco_csv = data_dir / f"racco_{year}_{month:02d}.csv"
+    if not args.skip_fetch:
+        from src.racco import RaccoClient
+        print("\n--- Racco取得 ---")
+        with RaccoClient() as client:
+            client.login()
+            racco_csv = client.download_csv(year, month)
+    if racco_csv.exists():
+        from src.racco import RaccoClient
+        racco_records = RaccoClient.parse_csv(racco_csv)
+        agg.add_racco(racco_records)
+        print(f"  Racco: {len(racco_records)}件追加")
+    else:
+        print(f"  Racco: CSVなし ({racco_csv})")
+
+    # じゃらん
+    jalan_csv = data_dir / f"jalan_{year}_{month:02d}.csv"
+    if not args.skip_fetch:
+        from src.jalan import JalanClient
+        print("\n--- じゃらん取得 ---")
+        with JalanClient() as client:
+            client.login()
+            jalan_csv = client.download_csv(year, month)
+    if jalan_csv.exists():
+        from src.jalan import JalanClient
+        jalan_records = JalanClient.parse_csv(jalan_csv)
+        agg.add_jalan(jalan_records)
+        print(f"  じゃらん: {len(jalan_records)}件追加")
+    else:
+        print(f"  じゃらん: CSVなし ({jalan_csv})")
+
+    # 3. MF経費API取得（--skip-fetch でもAPIは常に取得する）
+    print("\n--- MF経費API取得 ---")
+    mf = MFExpenseClient()
+    mf.ensure_token()
+    from_date = f"{year}-{month:02d}-01"
+    if month == 12:
+        to_date = f"{year + 1}-01-01"
+    else:
+        to_date = f"{year}-{month + 1:02d}-01"
+    mf_records = []
+    for label, office_id in MF_OFFICE_IDS.items():
+        print(f"  {label}: 旅費交通費取得中...")
+        records = mf.get_travel_expenses(office_id, from_date, to_date)
+        mf_records.extend(records)
+        print(f"  {label}: {len(records)}件")
+    agg.add_mf_expense(mf_records)
+    print(f"  MF経費合計: {len(mf_records)}件追加")
+
+    # 4. 集計
+    print("\n--- 集計結果 ---")
+    summary = agg.summarize()
+    unmatched = agg.get_unmatched()
+
+    if unmatched:
+        print(f"\n[WARNING] マッチしなかったレコード ({len(unmatched)}件):")
+        for u in unmatched:
+            print(f"  {u['source']}: {u['name']} → ¥{u['amount']:,} ({u['category']})")
+
+    print(f"\n個人別集計 ({len(summary)}名):")
+    total_all = 0
+    for r in summary:
+        print(
+            f"  {r['name']:12s} ({r['department']:20s}): "
+            f"新幹線¥{r['shinkansen']:>8,} / 宿泊¥{r['hotel']:>8,} / "
+            f"在来線¥{r['train']:>8,} / その他¥{r['other']:>8,} / "
+            f"合計¥{r['total']:>9,}"
+        )
+        total_all += r["total"]
+    print(f"\n  総合計: ¥{total_all:,}")
+
+    # 5. シート書き込み
+    if args.dry_run:
+        print("\n[dry-run] シート書き込みスキップ")
+        print(json.dumps(summary, indent=2, ensure_ascii=False))
+    else:
+        print("\n--- スプレッドシート出力 ---")
+        sheets.write_expense_summary(summary, year, month)
+        print("完了!")
 
 
 if __name__ == "__main__":

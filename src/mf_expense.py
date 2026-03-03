@@ -166,3 +166,63 @@ class MFExpenseClient:
                 self.expires_at = datetime.fromisoformat(expires_at)
         except (json.JSONDecodeError, KeyError):
             pass
+
+    # ── 旅費交通費フィルタ ──
+
+    # 科目名→カテゴリ マッピング
+    # ※「電車代（経路申請）」等、名前が「電車代」で始まるものは在来線
+    MF_CATEGORY_MAP = {
+        "新幹線代": "shinkansen",
+        "出張宿泊費": "hotel",
+        "電車代": "train",        # 「電車代」「電車代（経路申請）」等
+        "飛行機代": "other",
+        "高速代": "other",
+        "タクシー代": "other",
+        "バス代": "other",
+    }
+
+    def get_travel_expenses(
+        self, office_id: str, from_date: str, to_date: str
+    ) -> list[dict]:
+        """旅費交通費（S05）のみ取得し、カテゴリ付きで返す
+
+        Returns:
+            [{"name": "山田太郎", "amount": 1000, "category": "shinkansen",
+              "date": "2026-01-15", "item_name": "新幹線代"}, ...]
+        """
+        all_tx = self.get_ex_transactions(office_id, from_date, to_date)
+        results = []
+        for tx in all_tx:
+            item = tx.get("ex_item", {})
+            item_name = item.get("name", "")
+            # S05_旅費交通費 の科目のみ対象
+            dept_info = tx.get("dept", {})
+            # ex_item.excise_name で勘定科目を判定（または item_name で直接マッチ）
+            category = None
+            for prefix, cat in self.MF_CATEGORY_MAP.items():
+                if item_name.startswith(prefix):
+                    category = cat
+                    break
+            if category is None:
+                # 旅費交通費科目かどうかをex_item内の情報で判定
+                # sub_account が S05 系、または item_name に旅費関連キーワード
+                sub_account = item.get("sub_account", {})
+                sub_name = sub_account.get("name", "") if isinstance(sub_account, dict) else ""
+                if "旅費" in sub_name or "交通" in sub_name:
+                    category = "other"
+                else:
+                    continue  # 旅費交通費以外 → スキップ
+
+            member = tx.get("office_member", {})
+            name = member.get("name", "") if member else ""
+            value = tx.get("value", 0)
+            recognized_at = tx.get("recognized_at", "")
+
+            results.append({
+                "name": name,
+                "amount": abs(int(float(value))) if value else 0,
+                "category": category,
+                "date": recognized_at,
+                "item_name": item_name,
+            })
+        return results
