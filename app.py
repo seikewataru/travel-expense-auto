@@ -153,7 +153,7 @@ def run_aggregate(year: int, month: int, use_mf: bool, use_ex: bool, use_racco: 
 
 
 def load_roi_data(year: int, month: int) -> dict:
-    """ROIダッシュボード用データを読み込む"""
+    """ROIダッシュボード用データを読み込む（スプシのフリーズデータから）"""
     from src.sheets_client import SheetsClient
 
     sheets = SheetsClient()
@@ -164,13 +164,13 @@ def load_roi_data(year: int, month: int) -> dict:
     # 2. 売上データ
     sales = sheets.read_sales_data()
 
-    # 3. 旅費集計（既存CSV のみ — MF経費はOAuth必須のためCloud上ではスキップ）
-    expense_result = run_aggregate(year, month, use_mf=False, use_ex=True, use_racco=True, use_jalan=True, use_times=True, dry_run=True)
+    # 3. 旅費集計（スプシの確定データを読み返す）
+    expenses = sheets.read_expense_summary(year, month)
 
     return {
         "roi_master": roi_master,
         "sales": sales,
-        "expenses": expense_result["summary"],
+        "expenses": expenses,
     }
 
 

@@ -181,6 +181,49 @@ class SheetsClient:
         print(f"[Sheets] 書き込み完了: {len(rows)}行")
 
 
+    def read_expense_summary(self, year: int, month: int) -> list[dict]:
+        """出力先シートから集計済み旅費データを読み込む
+
+        Args:
+            year: 対象年
+            month: 対象月
+
+        Returns:
+            [{"emp_no": "2", "name": "山田 太郎", "department": "営業部",
+              "shinkansen": 10000, "hotel": 5000, "train": 3000, "other": 0, "total": 18000}, ...]
+        """
+        sh = self._gc.open_by_key(OUTPUT_SHEET_ID)
+        sheet_title = f"{year}年{month:02d}月"
+
+        try:
+            ws = sh.worksheet(sheet_title)
+        except gspread.exceptions.WorksheetNotFound:
+            print(f"[Sheets] シート '{sheet_title}' が見つかりません")
+            return []
+
+        all_values = ws.get_all_values()
+        if len(all_values) < 2:
+            return []
+
+        # Row 1 = ヘッダー: 社員番号, 名前, 部署, 新幹線, 宿泊, 在来線, その他, 合計
+        result = []
+        for row in all_values[1:]:
+            if len(row) < 8 or not row[1].strip():
+                continue
+            result.append({
+                "emp_no": row[0].strip(),
+                "name": row[1].strip(),
+                "department": row[2].strip(),
+                "shinkansen": self._parse_number(row[3]),
+                "hotel": self._parse_number(row[4]),
+                "train": self._parse_number(row[5]),
+                "other": self._parse_number(row[6]),
+                "total": self._parse_number(row[7]),
+            })
+
+        print(f"[Sheets] 集計データ読み込み完了: {len(result)}名（{sheet_title}）")
+        return result
+
     def read_roi_master(self, year: int, month: int) -> dict[str, str]:
         """人員マスタからROI分析用カテゴリを読み込む
 
