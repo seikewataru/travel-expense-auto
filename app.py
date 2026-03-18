@@ -110,6 +110,134 @@ def run_aggregate(year: int, month: int, use_mf: bool, use_ex: bool, use_racco: 
     return {"summary": summary, "unmatched": unmatched, "log": log}
 
 
+def load_roi_data(year: int, month: int) -> dict:
+    """ROIダッシュボード用データを読み込む"""
+    from src.sheets_client import SheetsClient
+
+    sheets = SheetsClient()
+
+    # 1. ROIカテゴリ付き人員マスタ
+    roi_master = sheets.read_roi_master(year, month)
+
+    # 2. 売上データ
+    sales = sheets.read_sales_data()
+
+    # 3. 旅費集計（既存CSV + MF経費）
+    expense_result = run_aggregate(year, month, use_mf=True, use_ex=True, use_racco=True, use_jalan=True, use_times=True, dry_run=True)
+
+    return {
+        "roi_master": roi_master,
+        "sales": sales,
+        "expenses": expense_result["summary"],
+    }
+
+
+def build_roi_table(roi_master: dict, expenses: list[dict], sales: dict, month_index: int) -> pd.DataFrame:
+    """ROIカテゴリ別に旅費と売上を集計してROIテーブルを生成"""
+
+    # ROIカテゴリ → 売上セグメントのマッピング
+    # ROIカテゴリ例: "マーケ_SDR_TUNAG" → 売上行 "SDR_月次新規獲得売上"
+    SEGMENT_SALES_MAP = {
+        "SDR": "SDR_月次新規獲得売上",
+        "BDR": "BDR_月次新規獲得売上",
+        "ALLI": "ALLI_月次新規獲得売上",
+        "UNION": "UNI_月次新規獲得売上",
+        "法人": "法人_月次新規獲得売上",
+    }
+
+    from src.sheets_client import normalize_name
+
+    # 社員名 → ROIカテゴリ
+    # 旅費を ROIカテゴリ別に集計
+    cat_expenses = {}  # roi_category -> total_expense
+    for row in expenses:
+        name = normalize_name(row["name"])
+        roi_cat = roi_master.get(name, "")
+        if not roi_cat:
+            roi_cat = "未分類"
+        cat_expenses[roi_cat] = cat_expenses.get(roi_cat, 0) + row["total"]
+
+    # ROIカテゴリをセグメントに集約
+    segment_expenses = {}
+    for roi_cat, amount in cat_expenses.items():
+        matched = False
+        for seg_key in SEGMENT_SALES_MAP:
+            if seg_key in roi_cat:
+                segment_expenses[seg_key] = segment_expenses.get(seg_key, 0) + amount
+                matched = True
+                break
+        if not matched:
+            segment_expenses["その他"] = segment_expenses.get("その他", 0) + amount
+
+    # 売上を取得
+    rows = []
+    for seg_key, sales_row_label in SEGMENT_SALES_MAP.items():
+        expense = segment_expenses.get(seg_key, 0)
+        sales_values = sales["data"].get(sales_row_label, [])
+        revenue = int(sales_values[month_index]) * 1000 if month_index < len(sales_values) else 0  # 千円→円
+        roi = revenue / expense if expense > 0 else 0
+        rows.append({
+            "セグメント": seg_key,
+            "旅費交通費": expense,
+            "売上": revenue,
+            "ROI": round(roi, 1),
+        })
+
+    # その他
+    other_expense = segment_expenses.get("その他", 0)
+    if other_expense > 0:
+        rows.append({
+            "セグメント": "その他",
+            "旅費交通費": other_expense,
+            "売上": 0,
+            "ROI": 0,
+        })
+
+    return pd.DataFrame(rows)
+
+
+def _demo_roi_data() -> dict:
+    """デモ用のROIデータを生成"""
+    roi_master = {
+        "佐々木 隆寛": "CS_UNION_TUNAG",
+        "杉山 一彦": "マーケ_BDR_TUNAG",
+        "飯田 真理子": "FS_法人_TUNAG",
+        "長尾 敏": "FS_法人_TUNAG",
+        "半田 優貴": "アライアンス_UNION_TUNAG",
+        "長谷川 悠生": "マーケ_SDR_TUNAG",
+        "東出 和輝": "マーケ_SDR_TUNAG",
+        "内藤 一真": "FS_法人_TUNAG",
+        "櫻井 美聡": "マーケ_SDR_TUNAG",
+        "金内 唯香": "事業開発_コンサルタント_TUNAG",
+    }
+    expenses = [
+        {"name": "佐々木 隆寛", "department": "UNION CS部", "shinkansen": 41764, "hotel": 455, "train": 11196, "other": 51264, "total": 104679, "emp_no": "222"},
+        {"name": "杉山 一彦", "department": "CRO室", "shinkansen": 36537, "hotel": 7427, "train": 12114, "other": 0, "total": 56078, "emp_no": "307"},
+        {"name": "飯田 真理子", "department": "営業2部", "shinkansen": 21655, "hotel": 0, "train": 31127, "other": 0, "total": 52782, "emp_no": "287"},
+        {"name": "長尾 敏", "department": "営業1部", "shinkansen": 0, "hotel": 28702, "train": 21777, "other": 0, "total": 50479, "emp_no": "146"},
+        {"name": "半田 優貴", "department": "UNION営業部", "shinkansen": 0, "hotel": 0, "train": 6425, "other": 39093, "total": 45518, "emp_no": "207"},
+        {"name": "長谷川 悠生", "department": "営業1部", "shinkansen": 30791, "hotel": 0, "train": 14532, "other": 0, "total": 45323, "emp_no": "49"},
+        {"name": "東出 和輝", "department": "営業1部", "shinkansen": 15645, "hotel": 0, "train": 15379, "other": 14091, "total": 45115, "emp_no": "247"},
+        {"name": "内藤 一真", "department": "営業1部", "shinkansen": 0, "hotel": 0, "train": 8019, "other": 35608, "total": 43627, "emp_no": "224"},
+        {"name": "櫻井 美聡", "department": "営業1部", "shinkansen": 26246, "hotel": 0, "train": 15508, "other": 0, "total": 41754, "emp_no": "213"},
+        {"name": "金内 唯香", "department": "ビジネス共創部", "shinkansen": 0, "hotel": 0, "train": 2290, "other": 30455, "total": 32745, "emp_no": "98"},
+    ]
+    # 売上データ（デモ）: 月次 × 12ヶ月（千円単位）
+    sales = {
+        "months": ["2026年1月", "2026年2月", "2026年3月", "2026年4月", "2026年5月", "2026年6月",
+                    "2026年7月", "2026年8月", "2026年9月", "2026年10月", "2026年11月", "2026年12月"],
+        "data": {
+            "SDR_月次新規獲得売上": [8500, 9200, 12800, 7600, 0, 0, 0, 0, 0, 0, 0, 0],
+            "BDR_月次新規獲得売上": [4200, 5100, 6300, 3800, 0, 0, 0, 0, 0, 0, 0, 0],
+            "ALLI_月次新規獲得売上": [3100, 2800, 4500, 2200, 0, 0, 0, 0, 0, 0, 0, 0],
+            "UNI_月次新規獲得売上": [2800, 3200, 3900, 2100, 0, 0, 0, 0, 0, 0, 0, 0],
+            "法人_月次新規獲得売上": [15200, 16800, 22000, 13200, 0, 0, 0, 0, 0, 0, 0, 0],
+            "合計_月次売上": [33800, 37100, 49500, 28900, 0, 0, 0, 0, 0, 0, 0, 0],
+        },
+    }
+    return {"roi_master": roi_master, "sales": sales, "expenses": expenses}
+
+
 def generate_journal_csv(summary: list[dict]) -> str:
     """MF会計Plusインポート用CSVを生成"""
     import csv
@@ -276,4 +404,74 @@ with tab2:
 # --- タブ3: ROIダッシュボード ---
 with tab3:
     st.header("部門別 旅費ROI")
-    st.info("Phase 4 で実装予定")
+
+    col_r1, col_r2 = st.columns([1, 1])
+    with col_r1:
+        roi_year = st.number_input("年", min_value=2024, max_value=2030, value=now.year, key="roi_year")
+    with col_r2:
+        roi_month = st.number_input("月", min_value=1, max_value=12, value=max(1, now.month - 1), key="roi_month")
+
+    demo_mode = st.checkbox("デモデータで表示", value=False, key="roi_demo")
+
+    if st.button("▶ ROI分析実行", type="primary", use_container_width=True, key="roi_btn"):
+        if demo_mode:
+            st.session_state["roi_data"] = _demo_roi_data()
+            st.session_state["roi_target_year"] = int(roi_year)
+            st.session_state["roi_target_month"] = int(roi_month)
+        else:
+            with st.spinner("データ読み込み中..."):
+                try:
+                    roi_data = load_roi_data(int(roi_year), int(roi_month))
+                    st.session_state["roi_data"] = roi_data
+                    st.session_state["roi_target_year"] = int(roi_year)
+                    st.session_state["roi_target_month"] = int(roi_month)
+                except Exception as e:
+                    st.error(f"エラー: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
+
+    if "roi_data" in st.session_state:
+        roi_data = st.session_state["roi_data"]
+        r_year = st.session_state["roi_target_year"]
+        r_month = st.session_state["roi_target_month"]
+
+        # 月インデックス（1月=0, 2月=1, ...）
+        month_index = r_month - 1
+
+        roi_df = build_roi_table(
+            roi_data["roi_master"],
+            roi_data["expenses"],
+            roi_data["sales"],
+            month_index,
+        )
+
+        st.subheader(f"{r_year}年{r_month}月 セグメント別ROI")
+
+        # サマリ指標
+        total_expense = roi_df["旅費交通費"].sum()
+        total_revenue = roi_df["売上"].sum()
+        overall_roi = total_revenue / total_expense if total_expense > 0 else 0
+
+        mc1, mc2, mc3 = st.columns(3)
+        mc1.metric("旅費交通費合計", f"¥{total_expense:,.0f}")
+        mc2.metric("売上合計", f"¥{total_revenue:,.0f}")
+        mc3.metric("全体ROI", f"{overall_roi:.1f}x")
+
+        # テーブル
+        display_df = roi_df.copy()
+        display_df["旅費交通費"] = display_df["旅費交通費"].apply(lambda x: f"¥{x:,.0f}")
+        display_df["売上"] = display_df["売上"].apply(lambda x: f"¥{x:,.0f}")
+        display_df["ROI"] = display_df["ROI"].apply(lambda x: f"{x:.1f}x")
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+        # 棒グラフ
+        st.subheader("セグメント別 旅費 vs 売上")
+        chart_df = roi_df[roi_df["セグメント"] != "その他"].melt(
+            id_vars=["セグメント"],
+            value_vars=["旅費交通費", "売上"],
+            var_name="項目",
+            value_name="金額",
+        )
+        st.bar_chart(
+            chart_df.pivot(index="セグメント", columns="項目", values="金額"),
+        )

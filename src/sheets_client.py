@@ -12,6 +12,7 @@ from src.config import (
     EX_CARD_MASTER_SHEET_ID,
     GCP_SERVICE_ACCOUNT_PATH,
     OUTPUT_SHEET_ID,
+    SALES_SHEET_ID,
 )
 
 
@@ -166,6 +167,100 @@ class SheetsClient:
 
         ws.update(range_name="A1", values=data)
         print(f"[Sheets] 書き込み完了: {len(rows)}行")
+
+
+    def read_roi_master(self, year: int, month: int) -> dict[str, str]:
+        """人員マスタからROI分析用カテゴリを読み込む
+
+        Args:
+            year: 対象年
+            month: 対象月
+
+        Returns:
+            {"山田 太郎": "マーケ_SDR_TUNAG", ...}
+        """
+        sh = self._gc.open_by_key(DEPT_MASTER_SHEET_ID)
+        ws = sh.worksheet("人員マスタ")
+        all_values = ws.get_all_values()
+
+        header_row = all_values[2]  # Row 3
+        name_col = 2
+
+        # ROI_分析用_YYMM 列を探す
+        yymm = f"{year % 100:02d}{month:02d}"
+        roi_col = None
+        for i, h in enumerate(header_row):
+            if f"ROI_分析用_{yymm}" in str(h):
+                roi_col = i
+                break
+
+        if roi_col is None:
+            # 最新のROI列を使用
+            for i in range(len(header_row) - 1, -1, -1):
+                if "ROI_分析用_" in str(header_row[i]):
+                    roi_col = i
+                    break
+
+        if roi_col is None:
+            return {}
+
+        result = {}
+        for row in all_values[3:]:
+            if len(row) > 0 and row[0].strip() == "退職":
+                continue
+            name = row[name_col].strip() if len(row) > name_col else ""
+            roi_cat = row[roi_col].strip() if len(row) > roi_col else ""
+            if name and roi_cat:
+                result[normalize_name(name)] = roi_cat
+
+        print(f"[Sheets] ROIマスタ読み込み完了: {len(result)}名")
+        return result
+
+    def read_sales_data(self) -> dict[str, list]:
+        """売上実績シートから月次売上を読み込む
+
+        Returns:
+            {
+                "row_label": [...],  # KPI行ラベル（C列）
+                "months": ["2026年1月", ...],  # 月ヘッダー
+                "data": {  # row_label -> [月次値, ...]
+                    "合計_月次売上": [123456, ...],
+                    "PF_MRR": [270198, ...],
+                    ...
+                }
+            }
+        """
+        sh = self._gc.open_by_key(SALES_SHEET_ID)
+        ws = sh.worksheet("実績")
+        all_values = ws.get_all_values()
+
+        # Row 1 (index 0): ヘッダー（D列以降が月）
+        header = all_values[0]
+        months = header[3:15]  # D〜O列 = 12ヶ月
+
+        data = {}
+        for row in all_values[1:]:
+            label = row[2].strip() if len(row) > 2 else ""
+            if not label:
+                continue
+            values = []
+            for cell in row[3:15]:
+                values.append(self._parse_number(cell))
+            data[label] = values
+
+        print(f"[Sheets] 売上データ読み込み完了: {len(data)}行 × {len(months)}ヶ月")
+        return {"months": months, "data": data}
+
+    @staticmethod
+    def _parse_number(value: str) -> float:
+        """数値文字列をfloatに変換（カンマ対応）"""
+        if not value:
+            return 0.0
+        s = str(value).strip().replace(",", "").replace("，", "")
+        try:
+            return float(s)
+        except ValueError:
+            return 0.0
 
 
 def normalize_name(name: str) -> str:
