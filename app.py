@@ -14,6 +14,44 @@ st.set_page_config(
 # --- バックエンド関数（UI より先に定義） ---
 
 
+def fetch_csv_source(source: str, year: int, month: int) -> str:
+    """Playwrightで各ソースからCSVを取得する"""
+    if source == "ex":
+        from src.ex_card import EXCardClient
+        with EXCardClient() as client:
+            client.login()
+            csv_path = client.download_csv(year, month)
+            records = client.parse_csv(csv_path)
+        return f"EXカード: {len(records)}件取得 → {csv_path.name}"
+
+    elif source == "racco":
+        from src.racco import RaccoClient
+        with RaccoClient() as client:
+            client.login()
+            csv_path = client.download_csv(year, month)
+            records = client.parse_csv(csv_path)
+        return f"Racco: {len(records)}件取得 → {csv_path.name}"
+
+    elif source == "jalan":
+        from src.jalan import JalanClient
+        with JalanClient() as client:
+            client.login()
+            csv_path = client.download_csv(year, month)
+            records = client.parse_csv(csv_path)
+        return f"じゃらん: {len(records)}件取得 → {csv_path.name}"
+
+    elif source == "times":
+        from src.times_car import TimesCarClient
+        with TimesCarClient() as client:
+            client.login()
+            csv_path = client.download_csv(year, month)
+            records = client.parse_csv(csv_path)
+        return f"タイムズカー: {len(records)}件取得 → {csv_path.name}"
+
+    else:
+        raise ValueError(f"未知のソース: {source}")
+
+
 def run_aggregate(year: int, month: int, use_mf: bool, use_ex: bool, use_racco: bool, use_jalan: bool, use_times: bool, dry_run: bool) -> dict:
     """既存の集計エンジンを呼び出す"""
     from src.config import EX_DATA_DIR, MF_OFFICE_IDS
@@ -325,11 +363,62 @@ with tab1:
 
     st.subheader("データソース")
     use_mf = st.checkbox("MF経費（API）", value=True)
-    use_ex = st.checkbox("EXカード（既存CSV）", value=True)
-    use_racco = st.checkbox("Racco（既存CSV）", value=True)
-    use_jalan = st.checkbox("じゃらん（既存CSV）", value=True)
-    use_times = st.checkbox("タイムズカー（既存CSV）", value=True)
+    use_ex = st.checkbox("EXカード", value=True)
+    use_racco = st.checkbox("Racco（楽天トラベル）", value=True)
+    use_jalan = st.checkbox("じゃらん", value=True)
+    use_times = st.checkbox("タイムズカー", value=True)
 
+    # CSV取得ボタン
+    st.subheader("CSV取得（Playwright）")
+    st.caption("ブラウザを起動して各サービスから最新CSVを取得します（ローカル実行のみ）")
+
+    fetch_cols = st.columns(4)
+    with fetch_cols[0]:
+        if st.button("🚅 EXカード取得", use_container_width=True):
+            with st.spinner("EXカード取得中..."):
+                try:
+                    msg = fetch_csv_source("ex", int(year), int(month))
+                    st.success(msg)
+                except Exception as e:
+                    st.error(f"EXカード取得エラー: {e}")
+    with fetch_cols[1]:
+        if st.button("🏨 Racco取得", use_container_width=True):
+            with st.spinner("Racco取得中..."):
+                try:
+                    msg = fetch_csv_source("racco", int(year), int(month))
+                    st.success(msg)
+                except Exception as e:
+                    st.error(f"Racco取得エラー: {e}")
+    with fetch_cols[2]:
+        if st.button("🏨 じゃらん取得", use_container_width=True):
+            with st.spinner("じゃらん取得中..."):
+                try:
+                    msg = fetch_csv_source("jalan", int(year), int(month))
+                    st.success(msg)
+                except Exception as e:
+                    st.error(f"じゃらん取得エラー: {e}")
+    with fetch_cols[3]:
+        if st.button("🚗 タイムズ取得", use_container_width=True):
+            with st.spinner("タイムズカー取得中..."):
+                try:
+                    msg = fetch_csv_source("times", int(year), int(month))
+                    st.success(msg)
+                except Exception as e:
+                    st.error(f"タイムズカー取得エラー: {e}")
+
+    if st.button("📥 全ソース一括取得", use_container_width=True):
+        with st.spinner("全ソースCSV取得中（数分かかります）..."):
+            results = []
+            for source in ["ex", "racco", "jalan", "times"]:
+                try:
+                    msg = fetch_csv_source(source, int(year), int(month))
+                    results.append(f"✅ {msg}")
+                except Exception as e:
+                    results.append(f"❌ {source}: {e}")
+            for r in results:
+                st.write(r)
+
+    st.divider()
     dry_run = st.checkbox("dry-run（シート書き込みなし）", value=True)
 
     if st.button("▶ 集計実行", type="primary", use_container_width=True):
