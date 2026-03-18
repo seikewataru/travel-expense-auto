@@ -1,8 +1,12 @@
 """旅費自動仕訳・ROI — Streamlit Webアプリ"""
 
+import os
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+
+# Streamlit Cloud 判定（Cloud では HOSTNAME が設定される）
+IS_CLOUD = os.getenv("STREAMLIT_SERVER_HEADLESS") == "true" or os.getenv("HOME") == "/home/appuser"
 
 st.set_page_config(
     page_title="旅費自動仕訳・ROI",
@@ -372,55 +376,56 @@ with tab1:
     use_jalan = st.checkbox("じゃらん", value=True)
     use_times = st.checkbox("タイムズカー", value=True)
 
-    # CSV取得ボタン
-    st.subheader("CSV取得（Playwright）")
-    st.caption("ブラウザを起動して各サービスから最新CSVを取得します（ローカル実行のみ）")
+    # CSV取得ボタン（ローカルのみ — Playwright が必要）
+    if not IS_CLOUD:
+        st.subheader("CSV取得（Playwright）")
+        st.caption("ブラウザを起動して各サービスから最新CSVを取得します（ローカル実行のみ）")
 
-    fetch_cols = st.columns(4)
-    with fetch_cols[0]:
-        if st.button("🚅 EXカード取得", use_container_width=True):
-            with st.spinner("EXカード取得中..."):
-                try:
-                    msg = fetch_csv_source("ex", int(year), int(month))
-                    st.success(msg)
-                except Exception as e:
-                    st.error(f"EXカード取得エラー: {e}")
-    with fetch_cols[1]:
-        if st.button("🏨 Racco取得", use_container_width=True):
-            with st.spinner("Racco取得中..."):
-                try:
-                    msg = fetch_csv_source("racco", int(year), int(month))
-                    st.success(msg)
-                except Exception as e:
-                    st.error(f"Racco取得エラー: {e}")
-    with fetch_cols[2]:
-        if st.button("🏨 じゃらん取得", use_container_width=True):
-            with st.spinner("じゃらん取得中..."):
-                try:
-                    msg = fetch_csv_source("jalan", int(year), int(month))
-                    st.success(msg)
-                except Exception as e:
-                    st.error(f"じゃらん取得エラー: {e}")
-    with fetch_cols[3]:
-        if st.button("🚗 タイムズ取得", use_container_width=True):
-            with st.spinner("タイムズカー取得中..."):
-                try:
-                    msg = fetch_csv_source("times", int(year), int(month))
-                    st.success(msg)
-                except Exception as e:
-                    st.error(f"タイムズカー取得エラー: {e}")
+        fetch_cols = st.columns(4)
+        with fetch_cols[0]:
+            if st.button("🚅 EXカード取得", use_container_width=True):
+                with st.spinner("EXカード取得中..."):
+                    try:
+                        msg = fetch_csv_source("ex", int(year), int(month))
+                        st.success(msg)
+                    except Exception as e:
+                        st.error(f"EXカード取得エラー: {e}")
+        with fetch_cols[1]:
+            if st.button("🏨 Racco取得", use_container_width=True):
+                with st.spinner("Racco取得中..."):
+                    try:
+                        msg = fetch_csv_source("racco", int(year), int(month))
+                        st.success(msg)
+                    except Exception as e:
+                        st.error(f"Racco取得エラー: {e}")
+        with fetch_cols[2]:
+            if st.button("🏨 じゃらん取得", use_container_width=True):
+                with st.spinner("じゃらん取得中..."):
+                    try:
+                        msg = fetch_csv_source("jalan", int(year), int(month))
+                        st.success(msg)
+                    except Exception as e:
+                        st.error(f"じゃらん取得エラー: {e}")
+        with fetch_cols[3]:
+            if st.button("🚗 タイムズ取得", use_container_width=True):
+                with st.spinner("タイムズカー取得中..."):
+                    try:
+                        msg = fetch_csv_source("times", int(year), int(month))
+                        st.success(msg)
+                    except Exception as e:
+                        st.error(f"タイムズカー取得エラー: {e}")
 
-    if st.button("📥 全ソース一括取得", use_container_width=True):
-        with st.spinner("全ソースCSV取得中（数分かかります）..."):
-            results = []
-            for source in ["ex", "racco", "jalan", "times"]:
-                try:
-                    msg = fetch_csv_source(source, int(year), int(month))
-                    results.append(f"✅ {msg}")
-                except Exception as e:
-                    results.append(f"❌ {source}: {e}")
-            for r in results:
-                st.write(r)
+        if st.button("📥 全ソース一括取得", use_container_width=True):
+            with st.spinner("全ソースCSV取得中（数分かかります）..."):
+                results = []
+                for source in ["ex", "racco", "jalan", "times"]:
+                    try:
+                        msg = fetch_csv_source(source, int(year), int(month))
+                        results.append(f"✅ {msg}")
+                    except Exception as e:
+                        results.append(f"❌ {source}: {e}")
+                for r in results:
+                    st.write(r)
 
     st.divider()
     dry_run = st.checkbox("dry-run（シート書き込みなし）", value=True)

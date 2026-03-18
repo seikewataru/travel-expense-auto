@@ -20,6 +20,15 @@ class SheetsClient:
     """Google Sheets 読み書きクライアント（サービスアカウント認証）"""
 
     def __init__(self):
+        # Streamlit Cloud: st.secrets["gcp_service_account"] から読む
+        # ローカル: ファイルパスから読む
+        try:
+            import streamlit as st
+            if "gcp_service_account" in st.secrets:
+                self._gc = gspread.service_account_from_dict(dict(st.secrets["gcp_service_account"]))
+                return
+        except Exception:
+            pass
         self._gc = gspread.service_account(filename=GCP_SERVICE_ACCOUNT_PATH)
 
     def read_department_master(self, year: int, month: int) -> dict[str, dict]:

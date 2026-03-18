@@ -1,6 +1,6 @@
 requests>=2.31
 python-dotenv>=1.0
 gspread>=6.0
-playwright>=1.40
 streamlit>=1.30
 pandas>=2.0
+# playwright>=1.40  # ローカル専用（pip install playwright && playwright install）
