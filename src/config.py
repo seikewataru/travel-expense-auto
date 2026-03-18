@@ -22,6 +22,9 @@ EX_CARD_NUMBER = os.getenv("EX_CARD_NUMBER", "")
 EX_PASSWORD = os.getenv("EX_PASSWORD", "")
 EX_OTP_EMAIL = os.getenv("EX_OTP_EMAIL", "backoffice@stmn.co.jp")
 
+# GAS OTP Webhook（設定されていればOTP自動取得、未設定なら手動入力）
+GAS_OTP_WEBHOOK_URL = os.getenv("GAS_OTP_WEBHOOK_URL", "")
+
 # タイムズカー（法人管理者Web）
 TIMES_LOGIN_URL = os.getenv("TIMES_LOGIN_URL", "https://plus.timescar.jp/view/corporation/login.jsp")
 TIMES_CONTRACT_ID = os.getenv("TIMES_CONTRACT_ID", "")
