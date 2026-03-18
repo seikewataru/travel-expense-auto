@@ -71,16 +71,19 @@ class ExpenseAggregator:
         dept_master: dict[str, dict],
         ex_card_master: dict[str, str] | None = None,
         ex_card_exclude_ids: set[str] | None = None,
+        ex_card_category_map: dict[str, str] | None = None,
     ):
         """
         Args:
             dept_master: normalize_name(名前) -> {"emp_no", "department", "raw_name"}
             ex_card_master: 会員ID(10桁) -> 現カード所持者名（EXカード管理シート）
             ex_card_exclude_ids: 集計除外対象の会員IDセット
+            ex_card_category_map: 会員ID -> 集計種別（広告関連貸出用/福利厚生関連貸出用/採用関連貸出用/個人貸与等）
         """
         self._master = dept_master
         self._ex_card_master = ex_card_master or {}
         self._ex_card_exclude_ids = ex_card_exclude_ids or set()
+        self._ex_card_category_map = ex_card_category_map or {}
         # 業務委託メンバーをマスタに注入
         for name, info in self.CONTRACTORS.items():
             normalized = normalize_name(name)
@@ -117,11 +120,21 @@ class ExpenseAggregator:
             "source": source,
         })
 
+    # 集計種別 → 仕訳カテゴリのマッピング
+    EX_CATEGORY_ACCOUNT_MAP: dict[str, str] = {
+        "個人貸与": "shinkansen",
+        "広告関連貸出用": "shinkansen_ad",
+        "福利厚生関連貸出用": "shinkansen_welfare",
+        "採用関連貸出用": "shinkansen_recruit",
+        "部門貸出用": "shinkansen_subsidiary",
+    }
+
     def add_ex_card(self, records: list[dict]) -> None:
-        """EXカードデータ → 新幹線カテゴリ
+        """EXカードデータ → 集計種別に応じたカテゴリ
 
         CSV fields: 会員ID, 会員氏名, 購入(請求)
         会員ID → EXカード管理シートの「現カード所持者」で本人名を解決
+        集計種別 → 広告/福利厚生/採用/個人貸与で勘定科目を振り分け
         """
         resolved = 0
         excluded = 0
@@ -131,23 +144,26 @@ class ExpenseAggregator:
             amount = tax_exclusive(parse_amount(r.get("購入(請求)", "0")))
             if amount == 0:
                 continue
-            # 除外対象カード（広告・福利厚生・採用・未定）はスキップ
+            # 除外対象カード（未定）はスキップ
             if member_id in self._ex_card_exclude_ids:
                 excluded += 1
                 continue
+            # 集計種別に応じたカテゴリを決定
+            card_category = self._ex_card_category_map.get(member_id, "個人貸与")
+            expense_category = self.EX_CATEGORY_ACCOUNT_MAP.get(card_category, "shinkansen")
             # カード単位のオーバーライド（管理シートより優先）
             if member_id in self.EX_CARD_OVERRIDES:
-                self._add(self.EX_CARD_OVERRIDES[member_id], "shinkansen", amount, "EXカード")
+                self._add(self.EX_CARD_OVERRIDES[member_id], expense_category, amount, "EXカード")
                 resolved += 1
                 continue
             # EXカードマスタで所持者名を解決
             holder = self._ex_card_master.get(member_id, "")
             if holder:
-                self._add(holder, "shinkansen", amount, "EXカード")
+                self._add(holder, expense_category, amount, "EXカード")
                 resolved += 1
             else:
                 # マスタに未登録の会員ID → unmatchedへ
-                self._add(raw_name, "shinkansen", amount, "EXカード")
+                self._add(raw_name, expense_category, amount, "EXカード")
         if self._ex_card_master:
             print(f"  EXカードマスタで名前解決: {resolved}/{len(records)}件")
         if excluded:
@@ -222,15 +238,23 @@ class ExpenseAggregator:
         for normalized_name, categories in self._data.items():
             info = self._master[normalized_name]
             shinkansen = categories.get("shinkansen", 0)
+            shinkansen_ad = categories.get("shinkansen_ad", 0)
+            shinkansen_welfare = categories.get("shinkansen_welfare", 0)
+            shinkansen_recruit = categories.get("shinkansen_recruit", 0)
+            shinkansen_subsidiary = categories.get("shinkansen_subsidiary", 0)
             hotel = categories.get("hotel", 0)
             train = categories.get("train", 0)
             other = categories.get("other", 0)
-            total = shinkansen + hotel + train + other
+            total = shinkansen + shinkansen_ad + shinkansen_welfare + shinkansen_recruit + shinkansen_subsidiary + hotel + train + other
             rows.append({
                 "emp_no": info["emp_no"],
                 "name": info["raw_name"],
                 "department": info["department"],
                 "shinkansen": shinkansen,
+                "shinkansen_ad": shinkansen_ad,
+                "shinkansen_welfare": shinkansen_welfare,
+                "shinkansen_recruit": shinkansen_recruit,
+                "shinkansen_subsidiary": shinkansen_subsidiary,
                 "hotel": hotel,
                 "train": train,
                 "other": other,

@@ -91,18 +91,19 @@ class SheetsClient:
         print(f"[Sheets] 部署マスタ読み込み完了: {len(result)}名（退職者除く）")
         return result
 
-    def read_ex_card_master(self) -> tuple[dict[str, str], set[str]]:
+    def read_ex_card_master(self) -> tuple[dict[str, str], set[str], dict[str, str]]:
         """EXカード管理シートを読み込み、会員ID→現カード所持者マッピングを返す
 
         ※毎月所持者が変わる可能性があるため、集計前に必ず最新を読み込むこと
 
         Returns:
-            (holder_map, exclude_ids)
+            (holder_map, exclude_ids, category_map)
             holder_map: {"6943717236": "丸岡 智泰", ...}
-            exclude_ids: I列が除外対象の会員IDセット
+            exclude_ids: 集計除外対象（未定・部門貸出用）の会員IDセット
+            category_map: {"0498368181": "広告関連貸出用", ...} 全カードの集計種別
         """
-        # I列がこれらの値のカードは集計から除外
-        EXCLUDE_CATEGORIES = {"広告関連貸出用", "福利厚生関連貸出用", "採用関連貸出用", "未定"}
+        # これらは集計から完全除外（仕訳も生成しない）
+        EXCLUDE_CATEGORIES = {"未定"}
 
         sh = self._gc.open_by_key(EX_CARD_MASTER_SHEET_ID)
         ws = sh.get_worksheet_by_id(EX_CARD_MASTER_GID)
@@ -111,6 +112,7 @@ class SheetsClient:
         # Row 7 (index 7) がヘッダー: col2=会員ID, col7=現カード所持者(氏名), col8=集計種別
         result = {}
         exclude_ids: set[str] = set()
+        category_map: dict[str, str] = {}
         for row in all_values[8:]:  # Row 8以降がデータ
             member_id = row[2].strip() if len(row) > 2 else ""
             holder = row[7].strip() if len(row) > 7 else ""
@@ -118,11 +120,12 @@ class SheetsClient:
             if not member_id:
                 continue
             result[member_id] = holder
+            category_map[member_id] = category
             if category in EXCLUDE_CATEGORIES:
                 exclude_ids.add(member_id)
 
         print(f"[Sheets] EXカードマスタ読み込み完了: {len(result)}件（除外: {len(exclude_ids)}件）")
-        return result, exclude_ids
+        return result, exclude_ids, category_map
 
     def write_expense_summary(
         self, rows: list[dict], year: int, month: int

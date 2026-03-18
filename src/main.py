@@ -192,9 +192,9 @@ def cmd_aggregate(args: argparse.Namespace) -> None:
     print(f"=== 旅費集計 {year}年{month}月 ===\n")
     sheets = SheetsClient()
     dept_master = sheets.read_department_master(year, month)
-    ex_card_master, ex_card_exclude_ids = sheets.read_ex_card_master()
+    ex_card_master, ex_card_exclude_ids, ex_card_category_map = sheets.read_ex_card_master()
 
-    agg = ExpenseAggregator(dept_master, ex_card_master=ex_card_master, ex_card_exclude_ids=ex_card_exclude_ids)
+    agg = ExpenseAggregator(dept_master, ex_card_master=ex_card_master, ex_card_exclude_ids=ex_card_exclude_ids, ex_card_category_map=ex_card_category_map)
 
     # 2. 各ソースCSV取得（--skip-fetch なら既存CSVを使用）
     data_dir = EX_DATA_DIR

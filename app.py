@@ -65,10 +65,10 @@ def run_aggregate(year: int, month: int, use_mf: bool, use_ex: bool, use_racco: 
     dept_master = sheets.read_department_master(year, month)
     log.append(f"部署マスタ: {len(dept_master)}名")
 
-    ex_card_master, ex_card_exclude_ids = sheets.read_ex_card_master()
+    ex_card_master, ex_card_exclude_ids, ex_card_category_map = sheets.read_ex_card_master()
     log.append(f"EXカードマスタ: {len(ex_card_master)}件（除外: {len(ex_card_exclude_ids)}件）")
 
-    agg = ExpenseAggregator(dept_master, ex_card_master=ex_card_master, ex_card_exclude_ids=ex_card_exclude_ids)
+    agg = ExpenseAggregator(dept_master, ex_card_master=ex_card_master, ex_card_exclude_ids=ex_card_exclude_ids, ex_card_category_map=ex_card_category_map)
 
     data_dir = EX_DATA_DIR
 
@@ -301,6 +301,10 @@ def generate_journal_csv(summary: list[dict]) -> str:
             continue
         categories = [
             ("shinkansen", "旅費交通費", "新幹線代"),
+            ("shinkansen_ad", "広告宣伝費", "新幹線代（展示会等）"),
+            ("shinkansen_welfare", "福利厚生費", "新幹線代（社内イベント）"),
+            ("shinkansen_recruit", "採用費", "新幹線代（採用関連）"),
+            ("shinkansen_subsidiary", "旅費交通費", "新幹線代（子会社）"),
             ("hotel", "旅費交通費", "出張宿泊費"),
             ("train", "旅費交通費", "電車代"),
             ("other", "旅費交通費", "その他交通費"),
