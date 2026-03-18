@@ -164,8 +164,8 @@ def load_roi_data(year: int, month: int) -> dict:
     # 2. 売上データ
     sales = sheets.read_sales_data()
 
-    # 3. 旅費集計（既存CSV + MF経費）
-    expense_result = run_aggregate(year, month, use_mf=True, use_ex=True, use_racco=True, use_jalan=True, use_times=True, dry_run=True)
+    # 3. 旅費集計（既存CSV のみ — MF経費はOAuth必須のためCloud上ではスキップ）
+    expense_result = run_aggregate(year, month, use_mf=False, use_ex=True, use_racco=True, use_jalan=True, use_times=True, dry_run=True)
 
     return {
         "roi_master": roi_master,
