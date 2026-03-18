@@ -15,16 +15,21 @@ def normalize_name(name: str) -> str:
 
 
 def parse_amount(value: str | int | float) -> int:
-    """金額文字列を整数に変換（カンマ・引用符・先頭ゼロ対応）"""
+    """金額文字列を整数に変換（カンマ・引用符・先頭ゼロ対応、符号保持）"""
     if isinstance(value, (int, float)):
-        return abs(int(value))
+        return int(value)
     s = str(value).strip().strip("'\"")
     s = s.replace(",", "").replace("，", "")
     if not s or not re.search(r"\d", s):
         return 0
-    # 数値部分だけ抽出
+    # 数値部分だけ抽出（マイナス符号を保持）
     m = re.search(r"-?[\d.]+", s)
-    return abs(int(float(m.group()))) if m else 0
+    return int(float(m.group())) if m else 0
+
+
+def tax_exclusive(amount: int) -> int:
+    """税込金額を税抜（10%消費税除外）に変換"""
+    return round(amount / 1.1)
 
 
 class ExpenseAggregator:
@@ -123,7 +128,7 @@ class ExpenseAggregator:
         for r in records:
             member_id = r.get("会員ID", "").strip().lstrip("'")
             raw_name = r.get("会員氏名", "").strip().lstrip("'")
-            amount = parse_amount(r.get("購入(請求)", "0"))
+            amount = tax_exclusive(parse_amount(r.get("購入(請求)", "0")))
             if amount == 0:
                 continue
             # 除外対象カード（広告・福利厚生・採用・未定）はスキップ
@@ -155,7 +160,7 @@ class ExpenseAggregator:
         """
         for r in records:
             name = r.get("name", "")
-            amount = r.get("amount", 0)
+            amount = tax_exclusive(r.get("amount", 0))
             category = r.get("category", "other")
             if amount == 0:
                 continue
@@ -171,7 +176,7 @@ class ExpenseAggregator:
             name = r.get("予約者名", "").strip()
             if not name:
                 name = r.get("宿泊代表者名", "").strip()
-            amount = parse_amount(r.get("宿泊金額", "0"))
+            amount = tax_exclusive(parse_amount(r.get("宿泊金額", "0")))
             if amount == 0:
                 continue
             self._add(name, "hotel", amount, "Racco")
@@ -189,7 +194,7 @@ class ExpenseAggregator:
             sei = r.get("宿泊代表者名（姓・漢字）", "").strip()
             mei = r.get("宿泊代表者名（名・漢字）", "").strip()
             name = f"{sei} {mei}" if sei and mei else sei or mei
-            amount = parse_amount(r.get("精算料金", "0"))
+            amount = tax_exclusive(parse_amount(r.get("精算料金", "0")))
             if amount == 0:
                 continue
             self._add(name, "hotel", amount, "じゃらん")
@@ -201,7 +206,7 @@ class ExpenseAggregator:
         """
         for r in records:
             name = r.get("会員名", "").strip()
-            amount = parse_amount(r.get("請求金額", "0"))
+            amount = tax_exclusive(parse_amount(r.get("請求金額", "0")))
             if amount == 0:
                 continue
             self._add(name, "other", amount, "タイムズカー")

@@ -220,7 +220,7 @@ class MFExpenseClient:
 
             results.append({
                 "name": name,
-                "amount": abs(int(float(value))) if value else 0,
+                "amount": int(float(value)) if value else 0,
                 "category": category,
                 "date": recognized_at,
                 "item_name": item_name,

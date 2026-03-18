@@ -9,3 +9,4 @@ data/
 .playwright/
 .mf_tokens.json
 data/ex_browser_profile/
+.streamlit/secrets.toml
