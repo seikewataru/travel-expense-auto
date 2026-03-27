@@ -330,28 +330,6 @@ def generate_journal_csv(summary: list[dict]) -> str:
     return output.getvalue()
 
 
-# --- 認証 ---
-
-
-def check_password():
-    """パスワード保護"""
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-
-    if st.session_state.authenticated:
-        return True
-
-    password = st.text_input("パスワード", type="password")
-    if password == st.secrets.get("app_password", "stmn2026"):
-        st.session_state.authenticated = True
-        st.rerun()
-    elif password:
-        st.error("パスワードが違います")
-    return False
-
-
-if not check_password():
-    st.stop()
 
 # --- メインUI ---
 st.title("旅費自動仕訳・ROI")
