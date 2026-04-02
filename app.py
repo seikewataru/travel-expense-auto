@@ -434,8 +434,21 @@ with tab1:
 
         if summary:
             df = pd.DataFrame(summary)
+
+            # 会社スコープ切替
+            scope = st.radio(
+                "表示範囲",
+                ["全体", "スタメン単体", "スタジアム単体"],
+                horizontal=True,
+                key="company_scope",
+            )
+            if scope == "スタメン単体":
+                df = df[df["department"] != "株式会社スタジアム"]
+            elif scope == "スタジアム単体":
+                df = df[df["department"] == "株式会社スタジアム"]
+
             total = df["total"].sum()
-            st.metric("総合計", f"¥{total:,.0f}", delta=f"{len(summary)}名")
+            st.metric("総合計", f"¥{total:,.0f}", delta=f"{len(df)}名")
 
             col_a, col_b, col_c, col_d = st.columns(4)
             col_a.metric("新幹線", f"¥{df['shinkansen'].sum():,.0f}")
