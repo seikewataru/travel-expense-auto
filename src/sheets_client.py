@@ -308,6 +308,51 @@ class SheetsClient:
         print(f"[Sheets] 売上データ読み込み完了: {len(data)}行 × {len(months)}ヶ月")
         return {"months": months, "data": data}
 
+    def write_roi_summary(
+        self, roi_df, year: int, month: int, overall_roi: float
+    ) -> None:
+        """ROI集計結果を出力先シートに書き込み
+
+        Args:
+            roi_df: build_roi_table() の結果（DataFrame）
+            year: 対象年
+            month: 対象月
+            overall_roi: 全体ROI
+        """
+        sh = self._gc.open_by_key(OUTPUT_SHEET_ID)
+
+        sheet_title = f"ROI_{year}年{month:02d}月"
+
+        try:
+            ws = sh.worksheet(sheet_title)
+            ws.clear()
+            print(f"[Sheets] 既存シート '{sheet_title}' をクリア")
+        except gspread.exceptions.WorksheetNotFound:
+            ws = sh.add_worksheet(title=sheet_title, rows=20, cols=6)
+            print(f"[Sheets] 新規シート '{sheet_title}' を作成")
+
+        # ヘッダー + データ
+        headers = ["セグメント", "旅費交通費", "売上", "ROI"]
+        data = [headers]
+        for _, row in roi_df.iterrows():
+            data.append([
+                row["セグメント"],
+                int(row["旅費交通費"]),
+                int(row["売上"]),
+                round(float(row["ROI"]), 1),
+            ])
+
+        # 合計行
+        data.append([
+            "合計",
+            int(roi_df["旅費交通費"].sum()),
+            int(roi_df["売上"].sum()),
+            round(overall_roi, 1),
+        ])
+
+        ws.update(range_name="A1", values=data)
+        print(f"[Sheets] ROI書き込み完了: {len(roi_df)}セグメント（{sheet_title}）")
+
     # 稟議シートV列 → 振替カテゴリのマッピング
     RINGI_CATEGORY_MAP: dict[str, str] = {
         "広告費": "ad",

@@ -573,3 +573,15 @@ with tab3:
         st.bar_chart(
             chart_df.pivot(index="セグメント", columns="項目", values="金額"),
         )
+
+        # スプシ書き出し
+        st.divider()
+        if st.button("📤 スプレッドシートに書き出し", key="roi_write_sheet"):
+            with st.spinner("書き込み中..."):
+                try:
+                    from src.sheets_client import SheetsClient
+                    sheets = SheetsClient()
+                    sheets.write_roi_summary(roi_df, r_year, r_month, overall_roi)
+                    st.success(f"ROI_{r_year}年{r_month:02d}月 シートに書き出し完了")
+                except Exception as e:
+                    st.error(f"書き出しエラー: {e}")
