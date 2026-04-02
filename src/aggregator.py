@@ -64,6 +64,8 @@ class ExpenseAggregator:
         "石井 一史": {"emp_no": "-", "department": "事業開発部", "raw_name": "石井 一史"},
         "樽田 和弥": {"emp_no": "-", "department": "マーケティング1部", "raw_name": "樽田 和弥"},
         "株式会社スタジアム": {"emp_no": "-", "department": "株式会社スタジアム", "raw_name": "株式会社スタジアム"},
+        "立川 拓真": {"emp_no": "-", "department": "株式会社スタジアム", "raw_name": "立川 拓真"},
+        "高草木 りさ": {"emp_no": "-", "department": "株式会社スタジアム", "raw_name": "高草木 りさ"},
     }
 
     def __init__(
