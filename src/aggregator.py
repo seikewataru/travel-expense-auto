@@ -72,6 +72,7 @@ class ExpenseAggregator:
         ex_card_master: dict[str, str] | None = None,
         ex_card_exclude_ids: set[str] | None = None,
         ex_card_category_map: dict[str, str] | None = None,
+        ringi_lookup: dict[str, str] | None = None,
     ):
         """
         Args:
@@ -79,11 +80,13 @@ class ExpenseAggregator:
             ex_card_master: 会員ID(10桁) -> 現カード所持者名（EXカード管理シート）
             ex_card_exclude_ids: 集計除外対象の会員IDセット
             ex_card_category_map: 会員ID -> 集計種別（広告関連貸出用/福利厚生関連貸出用/採用関連貸出用/個人貸与等）
+            ringi_lookup: TUNAG利用ID -> 振替分類（"ad"/"recruit"）
         """
         self._master = dept_master
         self._ex_card_master = ex_card_master or {}
         self._ex_card_exclude_ids = ex_card_exclude_ids or set()
         self._ex_card_category_map = ex_card_category_map or {}
+        self._ringi_lookup = ringi_lookup or {}
         # 業務委託メンバーをマスタに注入
         for name, info in self.CONTRACTORS.items():
             normalized = normalize_name(name)
@@ -169,18 +172,49 @@ class ExpenseAggregator:
         if excluded:
             print(f"  EXカード除外（貸出用等）: {excluded}件")
 
+    # 稟議振替分類 → カテゴリサフィックスのマッピング
+    RINGI_TRANSFER_MAP: dict[str, dict[str, str]] = {
+        # ringi_category -> {original_category -> transferred_category}
+        "ad": {
+            "shinkansen": "shinkansen_ad",
+            "hotel": "hotel_ad",
+            "train": "train_ad",
+            "other": "other_ad",
+        },
+        "recruit": {
+            "shinkansen": "shinkansen_recruit",
+            "hotel": "hotel_recruit",
+            "train": "train_recruit",
+            "other": "other_recruit",
+        },
+    }
+
     def add_mf_expense(self, records: list[dict]) -> None:
-        """MF経費データ → 科目名でカテゴリ振り分け
+        """MF経費データ → 科目名でカテゴリ振り分け + 稟議突合で振替
 
         records: get_travel_expenses() の返り値
         """
+        transferred = 0
         for r in records:
             name = r.get("name", "")
             amount = tax_exclusive(r.get("amount", 0))
             category = r.get("category", "other")
             if amount == 0:
                 continue
+
+            # 稟議突合による振替
+            report_number = r.get("report_number", "")
+            if report_number and report_number in self._ringi_lookup:
+                ringi_cat = self._ringi_lookup[report_number]
+                transfer_map = self.RINGI_TRANSFER_MAP.get(ringi_cat, {})
+                if category in transfer_map:
+                    category = transfer_map[category]
+                    transferred += 1
+
             self._add(name, category, amount, "MF経費")
+
+        if transferred:
+            print(f"  MF経費 稟議振替: {transferred}件")
 
     def add_racco(self, records: list[dict]) -> None:
         """Raccoデータ → 宿泊カテゴリ
@@ -243,9 +277,18 @@ class ExpenseAggregator:
             shinkansen_recruit = categories.get("shinkansen_recruit", 0)
             shinkansen_subsidiary = categories.get("shinkansen_subsidiary", 0)
             hotel = categories.get("hotel", 0)
+            hotel_ad = categories.get("hotel_ad", 0)
+            hotel_recruit = categories.get("hotel_recruit", 0)
             train = categories.get("train", 0)
+            train_ad = categories.get("train_ad", 0)
+            train_recruit = categories.get("train_recruit", 0)
             other = categories.get("other", 0)
-            total = shinkansen + shinkansen_ad + shinkansen_welfare + shinkansen_recruit + shinkansen_subsidiary + hotel + train + other
+            other_ad = categories.get("other_ad", 0)
+            other_recruit = categories.get("other_recruit", 0)
+            total = (shinkansen + shinkansen_ad + shinkansen_welfare + shinkansen_recruit + shinkansen_subsidiary
+                     + hotel + hotel_ad + hotel_recruit
+                     + train + train_ad + train_recruit
+                     + other + other_ad + other_recruit)
             rows.append({
                 "emp_no": info["emp_no"],
                 "name": info["raw_name"],
@@ -256,8 +299,14 @@ class ExpenseAggregator:
                 "shinkansen_recruit": shinkansen_recruit,
                 "shinkansen_subsidiary": shinkansen_subsidiary,
                 "hotel": hotel,
+                "hotel_ad": hotel_ad,
+                "hotel_recruit": hotel_recruit,
                 "train": train,
+                "train_ad": train_ad,
+                "train_recruit": train_recruit,
                 "other": other,
+                "other_ad": other_ad,
+                "other_recruit": other_recruit,
                 "total": total,
             })
         rows.sort(key=lambda x: x["total"], reverse=True)

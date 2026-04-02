@@ -218,11 +218,17 @@ class MFExpenseClient:
             value = tx.get("value", 0)
             recognized_at = tx.get("recognized_at", "")
 
+            report_number = tx.get("report_number", "") or ""
+            # URLの場合はID部分を抽出
+            if "tunag.jp" in report_number:
+                report_number = report_number.rstrip("/").split("/")[-1]
+
             results.append({
                 "name": name,
                 "amount": int(float(value)) if value else 0,
                 "category": category,
                 "date": recognized_at,
                 "item_name": item_name,
+                "report_number": report_number.strip(),
             })
         return results

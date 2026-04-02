@@ -72,7 +72,10 @@ def run_aggregate(year: int, month: int, use_mf: bool, use_ex: bool, use_racco: 
     ex_card_master, ex_card_exclude_ids, ex_card_category_map = sheets.read_ex_card_master()
     log.append(f"EXカードマスタ: {len(ex_card_master)}件（除外: {len(ex_card_exclude_ids)}件）")
 
-    agg = ExpenseAggregator(dept_master, ex_card_master=ex_card_master, ex_card_exclude_ids=ex_card_exclude_ids, ex_card_category_map=ex_card_category_map)
+    ringi_lookup = sheets.read_ringi_lookup()
+    log.append(f"稟議ルックアップ: {len(ringi_lookup)}件（広告費/採用費）")
+
+    agg = ExpenseAggregator(dept_master, ex_card_master=ex_card_master, ex_card_exclude_ids=ex_card_exclude_ids, ex_card_category_map=ex_card_category_map, ringi_lookup=ringi_lookup)
 
     data_dir = EX_DATA_DIR
 
@@ -310,8 +313,14 @@ def generate_journal_csv(summary: list[dict]) -> str:
             ("shinkansen_recruit", "採用費", "新幹線代（採用関連）"),
             ("shinkansen_subsidiary", "旅費交通費", "新幹線代（子会社）"),
             ("hotel", "旅費交通費", "出張宿泊費"),
+            ("hotel_ad", "広告宣伝費", "出張宿泊費（展示会等）"),
+            ("hotel_recruit", "採用費", "出張宿泊費（採用関連）"),
             ("train", "旅費交通費", "電車代"),
+            ("train_ad", "広告宣伝費", "電車代（展示会等）"),
+            ("train_recruit", "採用費", "電車代（採用関連）"),
             ("other", "旅費交通費", "その他交通費"),
+            ("other_ad", "広告宣伝費", "その他交通費（展示会等）"),
+            ("other_recruit", "採用費", "その他交通費（採用関連）"),
         ]
         for cat_key, account, sub_account in categories:
             amount = row.get(cat_key, 0)

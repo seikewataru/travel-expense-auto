@@ -76,6 +76,8 @@ OUTPUT_SHEET_ID = "1nJXQ2Wt7ilpcg_yktIxlaZvvaMvRf87B8dIALoyXbaA"
 EX_CARD_MASTER_SHEET_ID = "13fajhD-qWgerxdIJ31_6jfhajR1OJjm4XPamiFn-qjM"
 EX_CARD_MASTER_GID = 111917276  # EXカード管理シート
 SALES_SHEET_ID = "1Gho3cQ6U_cYg21QWx02prRCd962oNyIyZNrmE1qDka8"  # 売上実績シート
+RINGI_SHEET_ID = "16dKIWWL-m8XtZeIw1acrv8ZvdKoZLM-7kbl8Fxr7_YA"  # 稟議一覧シート
+RINGI_SHEET_GID = 1556503880  # 稟議一覧タブ
 
 # MF経費 事業者ID
 MF_OFFICE_IDS = {
