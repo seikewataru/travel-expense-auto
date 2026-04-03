@@ -15,6 +15,7 @@ from src.config import (
     RINGI_SHEET_GID,
     RINGI_SHEET_ID,
     SALES_SHEET_ID,
+    SALES_YOJITSU_GID,
 )
 
 
@@ -451,6 +452,50 @@ class SheetsClient:
         print(f"[Sheets] 売上データ読み込み完了: {len(data)}行 × {len(months)}ヶ月")
         return {"months": months, "data": data}
 
+    # セグメント別売上行（予実シート）
+    SEGMENT_SALES_ROWS = {
+        "SDR": "SDR_月次新規獲得売上",
+        "BDR": "BDR_月次新規獲得売上",
+        "ALLI": "ALLI_月次新規獲得売上",
+        "UNI": "UNI_月次新規獲得売上",
+        "法人": "法人_月次新規獲得売上",
+        "CCS": "CCS_MRR",
+        "事業開発": "SH_合計売上",
+        "COM": "COM_合計収益",
+    }
+
+    def read_segment_sales(self, month: int) -> dict[str, int]:
+        """予実シートからセグメント別の月次売上実績を取得
+
+        Args:
+            month: 対象月（1〜12）
+
+        Returns:
+            {"SDR": 5534000, "BDR": 4750000, ...}（円単位）
+        """
+        sh = self._gc.open_by_key(SALES_SHEET_ID)
+        ws = sh.get_worksheet_by_id(SALES_YOJITSU_GID)
+        all_values = ws.get_all_values()
+
+        # 月ごとに4列（予算/実績/予算差異/達成率）、D列(index 3)が1月予算
+        # 実績列 = 3 + (month-1)*4 + 1 = 4 + (month-1)*4
+        actual_col = 4 + (month - 1) * 4  # 0-based
+
+        # C列(index 2)でKPI行ラベルを検索
+        label_to_value = {}
+        for row in all_values:
+            label = row[2].strip() if len(row) > 2 else ""
+            if label and actual_col < len(row):
+                label_to_value[label] = self._parse_number(row[actual_col])
+
+        result = {}
+        for seg, label in self.SEGMENT_SALES_ROWS.items():
+            val = label_to_value.get(label, 0)
+            result[seg] = int(val * 1000)  # 千円→円
+
+        print(f"[Sheets] セグメント別売上読み込み完了: {month}月 | {', '.join(f'{k}={v//1000}K' for k, v in result.items() if v > 0)}")
+        return result
+
     def write_roi_summary(
         self, roi_df, year: int, month: int, overall_roi: float
     ) -> None:
@@ -530,20 +575,16 @@ class SheetsClient:
         print(f"[Sheets] 稟議ルックアップ読み込み完了: {len(result)}件（広告費/採用費のみ）")
         return result
 
-    def write_department_roi(
+    def write_segment_roi(
         self,
-        dept_summary: list[dict],
-        roi_master: dict[str, str],
-        sales: dict,
+        result_rows: list[dict],
         year: int,
         month: int,
     ) -> None:
-        """部門別ROI集計結果を「部門別ROI」タブに書き込み
+        """セグメント別ROI集計結果を「部門別ROI」タブに書き込み
 
         Args:
-            dept_summary: aggregator.summarize_by_department() の結果
-            roi_master: normalize_name(名前) -> ROIカテゴリ（例: "マーケ_SDR_TUNAG"）
-            sales: read_sales_data() の結果
+            result_rows: 売上・ROI付きのセグメント別集計結果
             year: 対象年
             month: 対象月
         """
@@ -551,15 +592,6 @@ class SheetsClient:
             CellFormat, Color, TextFormat, NumberFormat,
             format_cell_range, set_frozen, Borders, Border,
         )
-
-        # ROIカテゴリ → 売上行ラベルのマッピング（main.py と同じ）
-        SEGMENT_SALES_MAP = {
-            "SDR": "SDR_月次新規獲得売上",
-            "BDR": "BDR_月次新規獲得売上",
-            "ALLI": "ALLI_月次新規獲得売上",
-            "UNION": "UNI_月次新規獲得売上",
-            "法人": "法人_月次新規獲得売上",
-        }
 
         sh = self._gc.open_by_key(OUTPUT_SHEET_ID)
         tab_title = "部門別ROI"
@@ -570,96 +602,41 @@ class SheetsClient:
         except gspread.exceptions.WorksheetNotFound:
             ws = sh.add_worksheet(title=tab_title, rows=100, cols=12)
 
-        # --- 部門 → セグメント売上のマッピング ---
-        # roi_master から部門ごとのセグメントを特定
-        # 部門内の人がどのセグメントに属するかを集約
-        # (dept_master は aggregator 内にあるので、roi_master 経由で推測する)
-        dept_segments: dict[str, dict[str, int]] = {}  # dept -> {seg_key: person_count}
-        # dept_summary から部門名一覧は分かるが、roi_master は name -> roi_cat
-        # summarize_by_department の中の _data と _master を直接触れないので
-        # roi_master の全エントリをスキャンし、部門を推測する必要がある
-        # → dept_summary に含まれる部門に対して、roi_master のカテゴリから売上を紐付け
-
-        # 部門→セグメント対応を構築するために、read_department_master を再利用
-        dept_master_data = self.read_department_master(year, month)
-        for norm_name, roi_cat in roi_master.items():
-            info = dept_master_data.get(norm_name)
-            if not info:
-                continue
-            dept = info["department"]
-            for seg_key in SEGMENT_SALES_MAP:
-                if seg_key in roi_cat:
-                    if dept not in dept_segments:
-                        dept_segments[dept] = {}
-                    dept_segments[dept][seg_key] = dept_segments[dept].get(seg_key, 0) + 1
-                    break
-
-        # 部門の主セグメント（最多人数のセグメント）を決定
-        dept_main_segment: dict[str, str] = {}
-        for dept, seg_counts in dept_segments.items():
-            if seg_counts:
-                dept_main_segment[dept] = max(seg_counts, key=seg_counts.get)
-
-        month_index = month - 1
-
-        # --- データ行構築 ---
-        data_rows = []
-        for row in dept_summary:
-            dept = row["department"]
-            seg_key = dept_main_segment.get(dept)
-            revenue = 0
-            if seg_key:
-                sales_row_label = SEGMENT_SALES_MAP.get(seg_key, "")
-                sales_values = sales["data"].get(sales_row_label, [])
-                if month_index < len(sales_values):
-                    revenue = int(sales_values[month_index]) * 1000  # 千円→円
-            roi = revenue / row["total"] if row["total"] > 0 else 0
-            data_rows.append({
-                **row,
-                "revenue": revenue,
-                "roi": round(roi, 1),
-            })
-
-        # --- シート書き込み ---
-        # Row 1: タイトル
-        title = f"{year}年{month}月 部門別ROI"
-        # Row 2: ヘッダー
-        headers = ["部門", "人数", "新幹線", "在来線", "車移動", "飛行機", "宿泊費", "旅費合計", "売上", "ROI"]
+        title = f"{year}年{month}月 セグメント別ROI"
+        headers = ["セグメント", "人数", "新幹線", "在来線", "車移動", "飛行機", "宿泊費", "旅費合計", "売上", "ROI"]
 
         values = [[title] + [""] * (len(headers) - 1)]
         values.append(headers)
 
-        for dr in data_rows:
+        for r in result_rows:
             values.append([
-                dr["department"],
-                dr["headcount"],
-                dr["shinkansen"],
-                dr["train"],
-                dr["car"],
-                dr["airplane"],
-                dr["hotel"],
-                dr["total"],
-                dr["revenue"],
-                dr["roi"],
+                r["department"],
+                r["headcount"],
+                r["shinkansen"],
+                r["train"],
+                r["car"],
+                r["airplane"],
+                r["hotel"],
+                r["total"],
+                r["sales"],
+                r["roi"],
             ])
 
         # 合計行
-        totals = [
+        total_expense = sum(r["total"] for r in result_rows)
+        total_sales = sum(r["sales"] for r in result_rows)
+        values.append([
             "合計",
-            sum(r["headcount"] for r in data_rows),
-            sum(r["shinkansen"] for r in data_rows),
-            sum(r["train"] for r in data_rows),
-            sum(r["car"] for r in data_rows),
-            sum(r["airplane"] for r in data_rows),
-            sum(r["hotel"] for r in data_rows),
-            sum(r["total"] for r in data_rows),
-            sum(r["revenue"] for r in data_rows),
-            "",
-        ]
-        total_expense = sum(r["total"] for r in data_rows)
-        total_revenue = sum(r["revenue"] for r in data_rows)
-        totals[9] = round(total_revenue / total_expense, 1) if total_expense > 0 else 0
-        values.append(totals)
+            sum(r["headcount"] for r in result_rows),
+            sum(r["shinkansen"] for r in result_rows),
+            sum(r["train"] for r in result_rows),
+            sum(r["car"] for r in result_rows),
+            sum(r["airplane"] for r in result_rows),
+            sum(r["hotel"] for r in result_rows),
+            total_expense,
+            total_sales,
+            round(total_sales / total_expense, 1) if total_expense > 0 else 0,
+        ])
 
         ws.update(range_name="A1", values=values)
 
@@ -718,7 +695,7 @@ class SheetsClient:
 
         set_frozen(ws, rows=2, cols=1)
 
-        print(f"[Sheets] 部門別ROIタブ書き込み完了: {len(data_rows)}部門")
+        print(f"[Sheets] セグメント別ROIタブ書き込み完了: {len(result_rows)}セグメント")
 
     @staticmethod
     def _parse_number(value: str) -> float:

@@ -66,8 +66,8 @@ export default function DeptROITab() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold">部門別ROI</h2>
-          <p className="text-xs text-[var(--muted)] mt-0.5">部門ごとの旅費ROIを分析します</p>
+          <h2 className="text-lg font-bold">セグメント別ROI</h2>
+          <p className="text-xs text-[var(--muted)] mt-0.5">法人セグメントごとの旅費ROIを分析します</p>
         </div>
       </div>
 
@@ -127,14 +127,14 @@ export default function DeptROITab() {
           <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden">
             <div className="px-5 py-3 border-b border-[var(--border)] bg-slate-50/50">
               <span className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider">
-                部門別ROI
+                セグメント別ROI
               </span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
                 <thead>
                   <tr className="border-b border-[var(--border)] text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider">
-                    <th className="px-5 py-2.5 text-left">部門</th>
+                    <th className="px-5 py-2.5 text-left">セグメント</th>
                     <th className="px-5 py-2.5 text-right">人数</th>
                     <th className="px-5 py-2.5 text-right">新幹線</th>
                     <th className="px-5 py-2.5 text-right">在来線</th>
@@ -177,7 +177,7 @@ export default function DeptROITab() {
           {chartData && chartData.length > 0 && (
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
               <p className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
-                部門別 旅費合計 vs 売上
+                セグメント別 旅費合計 vs 売上
               </p>
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={chartData} barGap={4}>

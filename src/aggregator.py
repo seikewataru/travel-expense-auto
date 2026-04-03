@@ -383,6 +383,58 @@ class ExpenseAggregator:
         rows.sort(key=lambda x: x["total"], reverse=True)
         return rows
 
+    # ROIカテゴリからセグメントを抽出するキーワード
+    SEGMENT_KEYWORDS = ["SDR", "BDR", "ALLI", "CCS", "UNION", "UNI", "事業開発", "COM", "コミュニティ"]
+
+    def summarize_by_segment(self, roi_master: dict[str, str]) -> list[dict]:
+        """セグメント別集計結果を返す
+
+        roi_master: normalize_name(名前) -> ROIカテゴリ（例: "マーケ_SDR_TUNAG"）
+        ROIカテゴリからセグメントキーワード（SDR/BDR/ALLI等）を抽出し、
+        セグメント単位で旅費を集計する。
+
+        Returns:
+            [{"segment": "SDR", "shinkansen": 12345, "train": 6789,
+              "car": 0, "airplane": 0, "hotel": 5000, "total": 24134, "headcount": 5}, ...]
+        """
+        seg_data: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        seg_people: dict[str, set] = defaultdict(set)
+
+        for normalized_name, categories in self._data.items():
+            # ROIマスタからセグメントを特定
+            roi_cat = roi_master.get(normalized_name, "")
+            segment = "その他"
+            if roi_cat:
+                # UNIONとUNIを統一
+                for kw in self.SEGMENT_KEYWORDS:
+                    if kw in roi_cat:
+                        segment = "UNI" if kw == "UNION" else kw
+                        break
+
+            seg_people[segment].add(normalized_name)
+            for group_key, sub_keys in self.DEPT_CATEGORY_GROUPS.items():
+                for sub_key in sub_keys:
+                    seg_data[segment][group_key] += categories.get(sub_key, 0)
+
+        rows = []
+        for seg, cats in seg_data.items():
+            total = sum(cats.values())
+            if total == 0:
+                continue
+            rows.append({
+                "segment": seg,
+                "shinkansen": cats.get("shinkansen", 0),
+                "train": cats.get("train", 0),
+                "car": cats.get("car", 0),
+                "airplane": cats.get("airplane", 0),
+                "hotel": cats.get("hotel", 0),
+                "total": total,
+                "headcount": len(seg_people[seg]),
+            })
+
+        rows.sort(key=lambda x: x["total"], reverse=True)
+        return rows
+
     def get_unmatched(self) -> list[dict]:
         """部署マスタとマッチしなかったレコードを返す"""
         # 重複排除（同一名・同一ソース）

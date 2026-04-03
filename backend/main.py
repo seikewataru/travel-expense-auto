@@ -362,58 +362,32 @@ def dept_roi(req: DeptROIRequest):
         agg.add_jalan(jalan_records)
         log.append(f"じゃらん: {len(jalan_records)}件")
 
-    # 部門別集計
-    dept_summary = agg.summarize_by_department()
-    log.append(f"部門別集計: {len(dept_summary)}部門")
-
-    # ROIマスタ・売上データ読み込み
+    # ROIマスタ読み込み
     roi_master = sheets.read_roi_master(req.year, req.month)
-    sales = sheets.read_sales_data()
     log.append(f"ROIマスタ: {len(roi_master)}名")
 
-    # 部門別に売上・ROIを付与
-    from src.sheets_client import normalize_name
-    SEGMENT_SALES_MAP = {
-        "SDR": "SDR_月次新規獲得売上",
-        "BDR": "BDR_月次新規獲得売上",
-        "ALLI": "ALLI_月次新規獲得売上",
-        "UNION": "UNI_月次新規獲得売上",
-        "法人": "法人_月次新規獲得売上",
-    }
+    # セグメント別集計（SDR/BDR/ALLI/UNI/CCS/事業開発/COM/その他）
+    seg_summary = agg.summarize_by_segment(roi_master)
+    log.append(f"セグメント別集計: {len(seg_summary)}セグメント")
 
-    # 部門→主セグメントを特定（roi_master + dept_master で推測）
-    dept_segments: dict[str, dict[str, int]] = {}
-    for norm_name, roi_cat in roi_master.items():
-        info = dept_master.get(norm_name)
-        if not info:
-            continue
-        dept = info["department"]
-        for seg_key in SEGMENT_SALES_MAP:
-            if seg_key in roi_cat:
-                if dept not in dept_segments:
-                    dept_segments[dept] = {}
-                dept_segments[dept][seg_key] = dept_segments[dept].get(seg_key, 0) + 1
-                break
+    # セグメント別売上（予実シートから取得）
+    segment_sales = sheets.read_segment_sales(req.month)
 
-    dept_main_segment = {}
-    for dept, seg_counts in dept_segments.items():
-        if seg_counts:
-            dept_main_segment[dept] = max(seg_counts, key=seg_counts.get)
-
-    month_index = req.month - 1
+    # 売上・ROIを付与
     result_rows = []
-    for row in dept_summary:
-        dept = row["department"]
-        seg_key = dept_main_segment.get(dept)
-        revenue = 0
-        if seg_key:
-            sales_row_label = SEGMENT_SALES_MAP.get(seg_key, "")
-            sales_values = sales["data"].get(sales_row_label, [])
-            if month_index < len(sales_values):
-                revenue = int(sales_values[month_index]) * 1000
+    for row in seg_summary:
+        seg = row["segment"]
+        revenue = segment_sales.get(seg, 0)
         roi = revenue / row["total"] if row["total"] > 0 else 0
         result_rows.append({
-            **row,
+            "department": seg,  # フロントとの互換性のためdepartmentキーを維持
+            "headcount": row["headcount"],
+            "shinkansen": row["shinkansen"],
+            "train": row["train"],
+            "car": row["car"],
+            "airplane": row["airplane"],
+            "hotel": row["hotel"],
+            "total": row["total"],
             "sales": revenue,
             "roi": round(roi, 1),
         })
@@ -423,9 +397,9 @@ def dept_roi(req: DeptROIRequest):
     overall_roi = round(total_sales / total_expense, 1) if total_expense > 0 else 0
 
     # スプシ書き込み
-    if req.write_sheet and dept_summary:
-        sheets.write_department_roi(dept_summary, roi_master, sales, req.year, req.month)
-        log.append("部門別ROIタブ書き込み完了")
+    if req.write_sheet and seg_summary:
+        sheets.write_segment_roi(result_rows, req.year, req.month)
+        log.append("セグメント別ROIタブ書き込み完了")
 
     return {
         "departments": result_rows,

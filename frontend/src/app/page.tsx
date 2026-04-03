@@ -21,7 +21,7 @@ export default function Home() {
   return (
     <div className="flex min-h-screen">
       {/* サイドバー */}
-      <aside className="fixed top-0 left-0 h-screen w-[var(--sidebar-w)] border-r border-[var(--border)] bg-[var(--card)] flex flex-col z-20">
+      <aside className="fixed top-0 left-0 h-screen w-[220px] border-r border-[var(--border)] bg-[var(--card)] flex flex-col z-20">
         <div className="px-5 py-5 border-b border-[var(--border)]">
           <h1 className="text-base font-bold text-[var(--foreground)] tracking-tight">
             旅費自動仕訳
@@ -49,7 +49,7 @@ export default function Home() {
       </aside>
 
       {/* メインコンテンツ */}
-      <main className="flex-1 ml-[var(--sidebar-w)]">
+      <main className="flex-1 ml-[220px]">
         <div className="max-w-[1100px] mx-auto px-8 py-6">
           {tab === "aggregate" && <AggregateTab />}
           {tab === "journal" && <JournalTab />}
