@@ -160,7 +160,8 @@ def aggregate(req: AggregateRequest):
         log.append(f"未マッチ: {len(unmatched)}件")
 
     if not req.dry_run and summary:
-        sheets.write_expense_summary(summary, req.year, req.month)
+        roi_master = sheets.read_roi_master(req.year, req.month)
+        sheets.write_expense_summary(summary, req.year, req.month, roi_master=roi_master)
         log.append("スプレッドシート書き込み完了")
 
     return {"summary": summary, "unmatched": unmatched, "log": log}

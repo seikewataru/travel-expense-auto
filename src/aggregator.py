@@ -383,15 +383,11 @@ class ExpenseAggregator:
         rows.sort(key=lambda x: x["total"], reverse=True)
         return rows
 
-    # ROIカテゴリからセグメントを抽出するキーワード
-    SEGMENT_KEYWORDS = ["SDR", "BDR", "ALLI", "CCS", "UNION", "UNI", "事業開発", "COM", "コミュニティ"]
-
-    def summarize_by_segment(self, roi_master: dict[str, str]) -> list[dict]:
+    def summarize_by_segment(self, segment_map: dict[str, str]) -> list[dict]:
         """セグメント別集計結果を返す
 
-        roi_master: normalize_name(名前) -> ROIカテゴリ（例: "マーケ_SDR_TUNAG"）
-        ROIカテゴリからセグメントキーワード（SDR/BDR/ALLI等）を抽出し、
-        セグメント単位で旅費を集計する。
+        segment_map: normalize_name(名前) -> セグメントキー（例: "SDR", "BDR", "CCS"等）
+                     sheets_client.read_segment_map() の返り値
 
         Returns:
             [{"segment": "SDR", "shinkansen": 12345, "train": 6789,
@@ -401,16 +397,7 @@ class ExpenseAggregator:
         seg_people: dict[str, set] = defaultdict(set)
 
         for normalized_name, categories in self._data.items():
-            # ROIマスタからセグメントを特定
-            roi_cat = roi_master.get(normalized_name, "")
-            segment = "その他"
-            if roi_cat:
-                # UNIONとUNIを統一
-                for kw in self.SEGMENT_KEYWORDS:
-                    if kw in roi_cat:
-                        segment = "UNI" if kw == "UNION" else kw
-                        break
-
+            segment = segment_map.get(normalized_name, "その他")
             seg_people[segment].add(normalized_name)
             for group_key, sub_keys in self.DEPT_CATEGORY_GROUPS.items():
                 for sub_key in sub_keys:
