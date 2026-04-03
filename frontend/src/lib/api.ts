@@ -53,3 +53,21 @@ export type ROIResponse = {
   total_revenue: number;
   overall_roi: number;
 };
+
+export type DeptROIRow = {
+  department: string;
+  headcount: number;
+  shinkansen: number;
+  train: number;
+  car: number;
+  airplane: number;
+  hotel: number;
+  total: number;
+  sales: number;
+  roi: number;
+};
+
+export type DeptROIResponse = {
+  departments: DeptROIRow[];
+  totals: { total_expense: number; total_sales: number; overall_roi: number };
+};

@@ -175,10 +175,11 @@ class MFExpenseClient:
         "新幹線代": "shinkansen",
         "出張宿泊費": "hotel",
         "電車代": "train",        # 「電車代」「電車代（経路申請）」等
-        "飛行機代": "other",
-        "高速代": "other",
-        "タクシー代": "other",
-        "バス代": "other",
+        "飛行機代": "airplane",
+        "高速代": "car",
+        "タクシー代": "car",
+        "バス代": "car",
+        "カーシェアリング": "car",
     }
 
     def get_travel_expenses(

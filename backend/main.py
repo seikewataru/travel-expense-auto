@@ -48,6 +48,12 @@ class ROIWriteRequest(BaseModel):
     month: int
 
 
+class DeptROIRequest(BaseModel):
+    year: int
+    month: int
+    write_sheet: bool = False
+
+
 class FetchCSVRequest(BaseModel):
     source: str  # "ex" | "racco" | "jalan" | "times"
     year: int
@@ -293,6 +299,150 @@ def fetch_csv(req: FetchCSVRequest):
         return {"message": f"タイムズカー: {len(records)}件取得"}
     else:
         raise HTTPException(status_code=400, detail=f"未知のソース: {req.source}")
+
+
+@app.post("/api/dept-roi")
+def dept_roi(req: DeptROIRequest):
+    """部門別ROI集計"""
+    from src.config import EX_DATA_DIR
+    from src.sheets_client import SheetsClient
+    from src.aggregator import ExpenseAggregator
+
+    log = []
+
+    sheets = SheetsClient()
+    dept_master = sheets.read_department_master(req.year, req.month)
+    log.append(f"部署マスタ: {len(dept_master)}名")
+
+    ex_card_master, ex_card_exclude_ids, ex_card_category_map = sheets.read_ex_card_master()
+    log.append(f"EXカードマスタ: {len(ex_card_master)}件")
+
+    ringi_lookup = sheets.read_ringi_lookup()
+    log.append(f"稟議ルックアップ: {len(ringi_lookup)}件")
+
+    agg = ExpenseAggregator(
+        dept_master,
+        ex_card_master=ex_card_master,
+        ex_card_exclude_ids=ex_card_exclude_ids,
+        ex_card_category_map=ex_card_category_map,
+        ringi_lookup=ringi_lookup,
+    )
+
+    data_dir = EX_DATA_DIR
+
+    # EXカード
+    ex_csv = data_dir / f"ex_{req.year}_{req.month:02d}.csv"
+    if ex_csv.exists():
+        from src.ex_card import EXCardClient
+        ex_records = EXCardClient.parse_csv(ex_csv)
+        agg.add_ex_card(ex_records)
+        log.append(f"EXカード: {len(ex_records)}件")
+
+    # タイムズカー
+    times_csv = data_dir / f"times_{req.year}_{req.month:02d}.csv"
+    if times_csv.exists():
+        from src.times_car import TimesCarClient
+        times_records = TimesCarClient.parse_csv(times_csv)
+        agg.add_times_car(times_records)
+        log.append(f"タイムズカー: {len(times_records)}件")
+
+    # Racco
+    racco_csv = data_dir / f"racco_{req.year}_{req.month:02d}.csv"
+    if racco_csv.exists():
+        from src.racco import RaccoClient
+        racco_records = RaccoClient.parse_csv(racco_csv)
+        agg.add_racco(racco_records)
+        log.append(f"Racco: {len(racco_records)}件")
+
+    # じゃらん
+    jalan_csv = data_dir / f"jalan_{req.year}_{req.month:02d}.csv"
+    if jalan_csv.exists():
+        from src.jalan import JalanClient
+        jalan_records = JalanClient.parse_csv(jalan_csv)
+        agg.add_jalan(jalan_records)
+        log.append(f"じゃらん: {len(jalan_records)}件")
+
+    # 部門別集計
+    dept_summary = agg.summarize_by_department()
+    log.append(f"部門別集計: {len(dept_summary)}部門")
+
+    # ROIマスタ・売上データ読み込み
+    roi_master = sheets.read_roi_master(req.year, req.month)
+    sales = sheets.read_sales_data()
+    log.append(f"ROIマスタ: {len(roi_master)}名")
+
+    # 部門別に売上・ROIを付与
+    from src.sheets_client import normalize_name
+    SEGMENT_SALES_MAP = {
+        "SDR": "SDR_月次新規獲得売上",
+        "BDR": "BDR_月次新規獲得売上",
+        "ALLI": "ALLI_月次新規獲得売上",
+        "UNION": "UNI_月次新規獲得売上",
+        "法人": "法人_月次新規獲得売上",
+    }
+
+    # 部門→主セグメントを特定（roi_master + dept_master で推測）
+    dept_segments: dict[str, dict[str, int]] = {}
+    for norm_name, roi_cat in roi_master.items():
+        info = dept_master.get(norm_name)
+        if not info:
+            continue
+        dept = info["department"]
+        for seg_key in SEGMENT_SALES_MAP:
+            if seg_key in roi_cat:
+                if dept not in dept_segments:
+                    dept_segments[dept] = {}
+                dept_segments[dept][seg_key] = dept_segments[dept].get(seg_key, 0) + 1
+                break
+
+    dept_main_segment = {}
+    for dept, seg_counts in dept_segments.items():
+        if seg_counts:
+            dept_main_segment[dept] = max(seg_counts, key=seg_counts.get)
+
+    month_index = req.month - 1
+    result_rows = []
+    for row in dept_summary:
+        dept = row["department"]
+        seg_key = dept_main_segment.get(dept)
+        revenue = 0
+        if seg_key:
+            sales_row_label = SEGMENT_SALES_MAP.get(seg_key, "")
+            sales_values = sales["data"].get(sales_row_label, [])
+            if month_index < len(sales_values):
+                revenue = int(sales_values[month_index]) * 1000
+        roi = revenue / row["total"] if row["total"] > 0 else 0
+        result_rows.append({
+            **row,
+            "sales": revenue,
+            "roi": round(roi, 1),
+        })
+
+    total_expense = sum(r["total"] for r in result_rows)
+    total_sales = sum(r["sales"] for r in result_rows)
+    overall_roi = round(total_sales / total_expense, 1) if total_expense > 0 else 0
+
+    # スプシ書き込み
+    if req.write_sheet and dept_summary:
+        sheets.write_department_roi(dept_summary, roi_master, sales, req.year, req.month)
+        log.append("部門別ROIタブ書き込み完了")
+
+    return {
+        "departments": result_rows,
+        "totals": {
+            "total_expense": total_expense,
+            "total_sales": total_sales,
+            "overall_roi": overall_roi,
+        },
+        "log": log,
+    }
+
+
+@app.post("/api/dept-roi/write")
+def dept_roi_write(req: ROIWriteRequest):
+    """部門別ROIをスプレッドシートに書き出し"""
+    result = dept_roi(DeptROIRequest(year=req.year, month=req.month, write_sheet=True))
+    return {"message": f"部門別ROI {req.year}年{req.month}月 書き出し完了"}
 
 
 # ── ヘルパー ──

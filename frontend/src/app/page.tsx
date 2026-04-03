@@ -4,11 +4,13 @@ import { useState } from "react";
 import AggregateTab from "@/components/AggregateTab";
 import JournalTab from "@/components/JournalTab";
 import ROITab from "@/components/ROITab";
+import DeptROITab from "@/components/DeptROITab";
 
 const TABS = [
   { key: "aggregate", label: "旅費集計" },
   { key: "journal", label: "仕訳生成" },
   { key: "roi", label: "ROI分析" },
+  { key: "dept-roi", label: "部門別ROI" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -52,6 +54,7 @@ export default function Home() {
           {tab === "aggregate" && <AggregateTab />}
           {tab === "journal" && <JournalTab />}
           {tab === "roi" && <ROITab />}
+          {tab === "dept-roi" && <DeptROITab />}
         </div>
       </main>
     </div>

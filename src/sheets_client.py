@@ -138,10 +138,22 @@ class SheetsClient:
         print(f"[Sheets] EXカードマスタ読み込み完了: {len(result)}件（除外: {len(exclude_ids)}件）")
         return result, exclude_ids, category_map
 
+    # ROIタブの月ごとのカラム構成（6列/月: 新幹線, 在来線, 車移動, 飛行機, 宿泊費, 合計）
+    ROI_COLS_PER_MONTH = 6
+    ROI_DATA_START_COL = 3  # D列 = index 3 (0-based)
+    ROI_HEADER_ROW = 3      # Row 3 がカラムヘッダー
+    ROI_DATA_START_ROW = 4  # Row 4 からデータ
+
     def write_expense_summary(
         self, rows: list[dict], year: int, month: int
     ) -> None:
-        """集計結果を出力先シートに書き込み
+        """集計結果をROIタブに書き込み（既存フォーマット準拠）
+
+        ROIタブ構造:
+          Row 1: 年ヘッダー
+          Row 2: 月ヘッダー（D列=1月, J列=2月...各6列幅）
+          Row 3: 新幹線, 在来線, 車移動, 飛行機, 宿泊費, 合計
+          Row 4~: B=名前, C=部署, D~I=1月データ, J~O=2月データ...
 
         Args:
             rows: aggregator.summarize() の結果
@@ -149,38 +161,169 @@ class SheetsClient:
             month: 対象月
         """
         sh = self._gc.open_by_key(OUTPUT_SHEET_ID)
+        ws = sh.worksheet("ROI")
 
-        # シート名: "YYYY年MM月"
-        sheet_title = f"{year}年{month:02d}月"
+        # 対象月の開始列を計算（1月=D列(col4), 2月=J列(col10)...）
+        month_col_start = self.ROI_DATA_START_COL + (month - 1) * self.ROI_COLS_PER_MONTH  # 0-based
 
-        # 既存シートを探す or 新規作成
-        try:
-            ws = sh.worksheet(sheet_title)
-            ws.clear()
-            print(f"[Sheets] 既存シート '{sheet_title}' をクリア")
-        except gspread.exceptions.WorksheetNotFound:
-            ws = sh.add_worksheet(title=sheet_title, rows=len(rows) + 10, cols=10)
-            print(f"[Sheets] 新規シート '{sheet_title}' を作成")
+        # 既存のB列（名前一覧）を取得
+        all_values = ws.get_all_values()
+        existing_names = {}  # normalize_name -> row_index (0-based)
+        for i in range(self.ROI_DATA_START_ROW - 1, len(all_values)):
+            name = all_values[i][1].strip() if len(all_values[i]) > 1 else ""
+            if name:
+                existing_names[normalize_name(name)] = i
 
-        # ヘッダー
-        headers = ["社員番号", "名前", "部署", "新幹線", "宿泊", "在来線", "その他", "合計"]
+        # 月ヘッダーを書き込み（Row 2 に月名）
+        month_label = f"{month}月"
+        # gspread のcol番号は1-based
+        ws.update_cell(2, month_col_start + 1, month_label)
 
-        # データ行
-        data = [headers]
+        # カラムヘッダー（Row 3）— 初回のみ書き込み（既に入っていれば上書き）
+        col_headers = ["新幹線", "在来線", "車移動", "飛行機", "宿泊費", "合計"]
+        header_cells = []
+        for j, h in enumerate(col_headers):
+            header_cells.append(gspread.Cell(
+                self.ROI_HEADER_ROW,
+                month_col_start + 1 + j,
+                h,
+            ))
+        ws.update_cells(header_cells)
+
+        # データ書き込み
+        next_row = max(existing_names.values()) + 2 if existing_names else self.ROI_DATA_START_ROW
+        cells_to_update = []
+
         for r in rows:
-            data.append([
-                r.get("emp_no", ""),
-                r.get("name", ""),
-                r.get("department", ""),
-                r.get("shinkansen", 0),
-                r.get("hotel", 0),
-                r.get("train", 0),
-                r.get("other", 0),
-                r.get("total", 0),
-            ])
+            name = r.get("name", "")
+            normalized = normalize_name(name)
+            if not normalized:
+                continue
 
-        ws.update(range_name="A1", values=data)
-        print(f"[Sheets] 書き込み完了: {len(rows)}行")
+            # 既存行を探す or 新規行を追加
+            if normalized in existing_names:
+                row_idx = existing_names[normalized] + 1  # 1-based
+            else:
+                row_idx = next_row
+                next_row += 1
+                existing_names[normalized] = row_idx - 1
+                # B列=名前, C列=部署を書き込み
+                cells_to_update.append(gspread.Cell(row_idx, 1, r.get("emp_no", "")))
+                cells_to_update.append(gspread.Cell(row_idx, 2, name))
+                cells_to_update.append(gspread.Cell(row_idx, 3, r.get("department", "")))
+
+            # 各カテゴリの値（振替含む合算）
+            shinkansen_total = (r.get("shinkansen", 0) + r.get("shinkansen_ad", 0)
+                                + r.get("shinkansen_welfare", 0) + r.get("shinkansen_recruit", 0)
+                                + r.get("shinkansen_subsidiary", 0))
+            train_total = r.get("train", 0) + r.get("train_ad", 0) + r.get("train_recruit", 0)
+            car_total = r.get("car", 0) + r.get("car_ad", 0) + r.get("car_recruit", 0)
+            airplane_total = r.get("airplane", 0) + r.get("airplane_ad", 0) + r.get("airplane_recruit", 0)
+            hotel_total = r.get("hotel", 0) + r.get("hotel_ad", 0) + r.get("hotel_recruit", 0)
+            # other は car/airplane 分離前の残り
+            other_leftover = r.get("other", 0) + r.get("other_ad", 0) + r.get("other_recruit", 0)
+            # other_leftover は車移動に加算（バス等）
+            car_total += other_leftover
+            row_total = shinkansen_total + train_total + car_total + airplane_total + hotel_total
+
+            values = [shinkansen_total, train_total, car_total, airplane_total, hotel_total, row_total]
+            for j, v in enumerate(values):
+                cells_to_update.append(gspread.Cell(
+                    row_idx,
+                    month_col_start + 1 + j,
+                    v if v != 0 else "",
+                ))
+
+        if cells_to_update:
+            ws.update_cells(cells_to_update)
+
+        # 書式設定
+        self._format_roi_tab(ws, month_col_start, next_row - 1)
+
+        print(f"[Sheets] ROIタブ書き込み完了: {len(rows)}名 → {month}月列")
+
+    def _format_roi_tab(self, ws, month_col_start: int, last_data_row: int) -> None:
+        """ROIタブの書式を設定"""
+        from gspread_formatting import (
+            CellFormat, Color, TextFormat, NumberFormat,
+            format_cell_range, set_frozen, Borders, Border,
+        )
+
+        sheet_id = ws.id
+
+        # 色定義
+        header_bg = Color(0.22, 0.46, 0.85)     # 青 (#3876D9)
+        header_text = Color(1, 1, 1)              # 白
+        month_bg = Color(0.87, 0.92, 0.98)        # 薄い青 (#DEEBFA)
+        total_bg = Color(0.95, 0.97, 0.99)        # 極薄い青 (#F2F8FE)
+        name_bg = Color(0.98, 0.98, 0.98)         # 極薄グレー
+        border_color = Color(0.82, 0.85, 0.89)    # ボーダーグレー
+
+        thin_border = Border("SOLID", color=border_color)
+        all_borders = Borders(top=thin_border, bottom=thin_border, left=thin_border, right=thin_border)
+
+        # 月ヘッダーの列範囲（1-based col letter）
+        def col_letter(col_0based):
+            c = col_0based
+            if c < 26:
+                return chr(65 + c)
+            return chr(64 + c // 26) + chr(65 + c % 26)
+
+        start_col = col_letter(month_col_start)
+        end_col = col_letter(month_col_start + self.ROI_COLS_PER_MONTH - 1)
+        total_col_letter = end_col  # 合計列
+
+        # Row 2 月ヘッダー: 青背景 + 白文字
+        format_cell_range(ws, f"{start_col}2:{end_col}2", CellFormat(
+            backgroundColor=header_bg,
+            textFormat=TextFormat(bold=True, foregroundColor=header_text, fontSize=10),
+            horizontalAlignment="CENTER",
+            borders=all_borders,
+        ))
+
+        # Row 3 カラムヘッダー: 薄い青背景
+        format_cell_range(ws, f"{start_col}3:{end_col}3", CellFormat(
+            backgroundColor=month_bg,
+            textFormat=TextFormat(bold=True, fontSize=9),
+            horizontalAlignment="CENTER",
+            borders=all_borders,
+        ))
+
+        # A〜C列ヘッダー（Row 3）: 薄い青背景
+        format_cell_range(ws, "A3:C3", CellFormat(
+            backgroundColor=month_bg,
+            textFormat=TextFormat(bold=True, fontSize=9),
+            borders=all_borders,
+        ))
+
+        # B列（名前）: 薄グレー背景
+        if last_data_row >= self.ROI_DATA_START_ROW:
+            format_cell_range(ws, f"A{self.ROI_DATA_START_ROW}:C{last_data_row}", CellFormat(
+                backgroundColor=name_bg,
+                borders=all_borders,
+            ))
+
+        # データセル: 数値フォーマット（カンマ区切り） + ボーダー
+        if last_data_row >= self.ROI_DATA_START_ROW:
+            data_range = f"{start_col}{self.ROI_DATA_START_ROW}:{end_col}{last_data_row}"
+            format_cell_range(ws, data_range, CellFormat(
+                numberFormat=NumberFormat(type="NUMBER", pattern="#,##0"),
+                horizontalAlignment="RIGHT",
+                borders=all_borders,
+            ))
+
+            # 合計列: 太字 + 薄い青背景
+            total_range = f"{total_col_letter}{self.ROI_DATA_START_ROW}:{total_col_letter}{last_data_row}"
+            format_cell_range(ws, total_range, CellFormat(
+                backgroundColor=total_bg,
+                textFormat=TextFormat(bold=True),
+                numberFormat=NumberFormat(type="NUMBER", pattern="#,##0"),
+                horizontalAlignment="RIGHT",
+                borders=all_borders,
+            ))
+
+        # ヘッダー行を固定
+        set_frozen(ws, rows=3, cols=3)
 
 
     def read_expense_summary(self, year: int, month: int) -> list[dict]:
@@ -386,6 +529,196 @@ class SheetsClient:
 
         print(f"[Sheets] 稟議ルックアップ読み込み完了: {len(result)}件（広告費/採用費のみ）")
         return result
+
+    def write_department_roi(
+        self,
+        dept_summary: list[dict],
+        roi_master: dict[str, str],
+        sales: dict,
+        year: int,
+        month: int,
+    ) -> None:
+        """部門別ROI集計結果を「部門別ROI」タブに書き込み
+
+        Args:
+            dept_summary: aggregator.summarize_by_department() の結果
+            roi_master: normalize_name(名前) -> ROIカテゴリ（例: "マーケ_SDR_TUNAG"）
+            sales: read_sales_data() の結果
+            year: 対象年
+            month: 対象月
+        """
+        from gspread_formatting import (
+            CellFormat, Color, TextFormat, NumberFormat,
+            format_cell_range, set_frozen, Borders, Border,
+        )
+
+        # ROIカテゴリ → 売上行ラベルのマッピング（main.py と同じ）
+        SEGMENT_SALES_MAP = {
+            "SDR": "SDR_月次新規獲得売上",
+            "BDR": "BDR_月次新規獲得売上",
+            "ALLI": "ALLI_月次新規獲得売上",
+            "UNION": "UNI_月次新規獲得売上",
+            "法人": "法人_月次新規獲得売上",
+        }
+
+        sh = self._gc.open_by_key(OUTPUT_SHEET_ID)
+        tab_title = "部門別ROI"
+
+        try:
+            ws = sh.worksheet(tab_title)
+            ws.clear()
+        except gspread.exceptions.WorksheetNotFound:
+            ws = sh.add_worksheet(title=tab_title, rows=100, cols=12)
+
+        # --- 部門 → セグメント売上のマッピング ---
+        # roi_master から部門ごとのセグメントを特定
+        # 部門内の人がどのセグメントに属するかを集約
+        # (dept_master は aggregator 内にあるので、roi_master 経由で推測する)
+        dept_segments: dict[str, dict[str, int]] = {}  # dept -> {seg_key: person_count}
+        # dept_summary から部門名一覧は分かるが、roi_master は name -> roi_cat
+        # summarize_by_department の中の _data と _master を直接触れないので
+        # roi_master の全エントリをスキャンし、部門を推測する必要がある
+        # → dept_summary に含まれる部門に対して、roi_master のカテゴリから売上を紐付け
+
+        # 部門→セグメント対応を構築するために、read_department_master を再利用
+        dept_master_data = self.read_department_master(year, month)
+        for norm_name, roi_cat in roi_master.items():
+            info = dept_master_data.get(norm_name)
+            if not info:
+                continue
+            dept = info["department"]
+            for seg_key in SEGMENT_SALES_MAP:
+                if seg_key in roi_cat:
+                    if dept not in dept_segments:
+                        dept_segments[dept] = {}
+                    dept_segments[dept][seg_key] = dept_segments[dept].get(seg_key, 0) + 1
+                    break
+
+        # 部門の主セグメント（最多人数のセグメント）を決定
+        dept_main_segment: dict[str, str] = {}
+        for dept, seg_counts in dept_segments.items():
+            if seg_counts:
+                dept_main_segment[dept] = max(seg_counts, key=seg_counts.get)
+
+        month_index = month - 1
+
+        # --- データ行構築 ---
+        data_rows = []
+        for row in dept_summary:
+            dept = row["department"]
+            seg_key = dept_main_segment.get(dept)
+            revenue = 0
+            if seg_key:
+                sales_row_label = SEGMENT_SALES_MAP.get(seg_key, "")
+                sales_values = sales["data"].get(sales_row_label, [])
+                if month_index < len(sales_values):
+                    revenue = int(sales_values[month_index]) * 1000  # 千円→円
+            roi = revenue / row["total"] if row["total"] > 0 else 0
+            data_rows.append({
+                **row,
+                "revenue": revenue,
+                "roi": round(roi, 1),
+            })
+
+        # --- シート書き込み ---
+        # Row 1: タイトル
+        title = f"{year}年{month}月 部門別ROI"
+        # Row 2: ヘッダー
+        headers = ["部門", "人数", "新幹線", "在来線", "車移動", "飛行機", "宿泊費", "旅費合計", "売上", "ROI"]
+
+        values = [[title] + [""] * (len(headers) - 1)]
+        values.append(headers)
+
+        for dr in data_rows:
+            values.append([
+                dr["department"],
+                dr["headcount"],
+                dr["shinkansen"],
+                dr["train"],
+                dr["car"],
+                dr["airplane"],
+                dr["hotel"],
+                dr["total"],
+                dr["revenue"],
+                dr["roi"],
+            ])
+
+        # 合計行
+        totals = [
+            "合計",
+            sum(r["headcount"] for r in data_rows),
+            sum(r["shinkansen"] for r in data_rows),
+            sum(r["train"] for r in data_rows),
+            sum(r["car"] for r in data_rows),
+            sum(r["airplane"] for r in data_rows),
+            sum(r["hotel"] for r in data_rows),
+            sum(r["total"] for r in data_rows),
+            sum(r["revenue"] for r in data_rows),
+            "",
+        ]
+        total_expense = sum(r["total"] for r in data_rows)
+        total_revenue = sum(r["revenue"] for r in data_rows)
+        totals[9] = round(total_revenue / total_expense, 1) if total_expense > 0 else 0
+        values.append(totals)
+
+        ws.update(range_name="A1", values=values)
+
+        # --- 書式設定 ---
+        last_row = len(values)
+        header_bg = Color(0.22, 0.46, 0.85)
+        header_text = Color(1, 1, 1)
+        total_bg = Color(0.95, 0.97, 0.99)
+        border_color = Color(0.82, 0.85, 0.89)
+        thin_border = Border("SOLID", color=border_color)
+        all_borders = Borders(top=thin_border, bottom=thin_border, left=thin_border, right=thin_border)
+
+        # タイトル行
+        format_cell_range(ws, "A1:J1", CellFormat(
+            textFormat=TextFormat(bold=True, fontSize=12),
+        ))
+
+        # ヘッダー行 (Row 2): 青背景 + 白文字
+        format_cell_range(ws, "A2:J2", CellFormat(
+            backgroundColor=header_bg,
+            textFormat=TextFormat(bold=True, foregroundColor=header_text, fontSize=10),
+            horizontalAlignment="CENTER",
+            borders=all_borders,
+        ))
+
+        # データ行: 数値フォーマット + ボーダー
+        if last_row > 2:
+            # 部門列 (A)
+            format_cell_range(ws, f"A3:A{last_row}", CellFormat(
+                borders=all_borders,
+            ))
+            # 人数列 (B)
+            format_cell_range(ws, f"B3:B{last_row}", CellFormat(
+                numberFormat=NumberFormat(type="NUMBER", pattern="#,##0"),
+                horizontalAlignment="CENTER",
+                borders=all_borders,
+            ))
+            # 金額列 (C-I)
+            format_cell_range(ws, f"C3:I{last_row}", CellFormat(
+                numberFormat=NumberFormat(type="NUMBER", pattern="#,##0"),
+                horizontalAlignment="RIGHT",
+                borders=all_borders,
+            ))
+            # ROI列 (J)
+            format_cell_range(ws, f"J3:J{last_row}", CellFormat(
+                numberFormat=NumberFormat(type="NUMBER", pattern="#,##0.0"),
+                horizontalAlignment="RIGHT",
+                borders=all_borders,
+            ))
+            # 合計行: 太字 + 背景色
+            format_cell_range(ws, f"A{last_row}:J{last_row}", CellFormat(
+                backgroundColor=total_bg,
+                textFormat=TextFormat(bold=True),
+                borders=all_borders,
+            ))
+
+        set_frozen(ws, rows=2, cols=1)
+
+        print(f"[Sheets] 部門別ROIタブ書き込み完了: {len(data_rows)}部門")
 
     @staticmethod
     def _parse_number(value: str) -> float:

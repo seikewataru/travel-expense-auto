@@ -181,12 +181,16 @@ class ExpenseAggregator:
             "shinkansen": "shinkansen_ad",
             "hotel": "hotel_ad",
             "train": "train_ad",
+            "car": "car_ad",
+            "airplane": "airplane_ad",
             "other": "other_ad",
         },
         "recruit": {
             "shinkansen": "shinkansen_recruit",
             "hotel": "hotel_recruit",
             "train": "train_recruit",
+            "car": "car_recruit",
+            "airplane": "airplane_recruit",
             "other": "other_recruit",
         },
     }
@@ -261,7 +265,7 @@ class ExpenseAggregator:
             amount = tax_exclusive(parse_amount(r.get("請求金額", "0")))
             if amount == 0:
                 continue
-            self._add(name, "other", amount, "タイムズカー")
+            self._add(name, "car", amount, "タイムズカー")
 
     def summarize(self) -> list[dict]:
         """個人別集計結果を返す
@@ -284,12 +288,20 @@ class ExpenseAggregator:
             train = categories.get("train", 0)
             train_ad = categories.get("train_ad", 0)
             train_recruit = categories.get("train_recruit", 0)
+            car = categories.get("car", 0)
+            car_ad = categories.get("car_ad", 0)
+            car_recruit = categories.get("car_recruit", 0)
+            airplane = categories.get("airplane", 0)
+            airplane_ad = categories.get("airplane_ad", 0)
+            airplane_recruit = categories.get("airplane_recruit", 0)
             other = categories.get("other", 0)
             other_ad = categories.get("other_ad", 0)
             other_recruit = categories.get("other_recruit", 0)
             total = (shinkansen + shinkansen_ad + shinkansen_welfare + shinkansen_recruit + shinkansen_subsidiary
                      + hotel + hotel_ad + hotel_recruit
                      + train + train_ad + train_recruit
+                     + car + car_ad + car_recruit
+                     + airplane + airplane_ad + airplane_recruit
                      + other + other_ad + other_recruit)
             rows.append({
                 "emp_no": info["emp_no"],
@@ -306,11 +318,68 @@ class ExpenseAggregator:
                 "train": train,
                 "train_ad": train_ad,
                 "train_recruit": train_recruit,
+                "car": car,
+                "car_ad": car_ad,
+                "car_recruit": car_recruit,
+                "airplane": airplane,
+                "airplane_ad": airplane_ad,
+                "airplane_recruit": airplane_recruit,
                 "other": other,
                 "other_ad": other_ad,
                 "other_recruit": other_recruit,
                 "total": total,
             })
+        rows.sort(key=lambda x: x["total"], reverse=True)
+        return rows
+
+    # 部門別集計で合算するサブカテゴリのマッピング
+    DEPT_CATEGORY_GROUPS: dict[str, list[str]] = {
+        "shinkansen": ["shinkansen", "shinkansen_ad", "shinkansen_welfare", "shinkansen_recruit", "shinkansen_subsidiary"],
+        "train": ["train", "train_ad", "train_recruit"],
+        "car": ["car", "car_ad", "car_recruit", "other", "other_ad", "other_recruit"],
+        "airplane": ["airplane", "airplane_ad", "airplane_recruit"],
+        "hotel": ["hotel", "hotel_ad", "hotel_recruit"],
+    }
+
+    def summarize_by_department(self) -> list[dict]:
+        """部門別集計結果を返す
+
+        サブカテゴリ（_ad, _welfare, _recruit, _subsidiary）は親カテゴリに合算。
+        other系はcar（車移動）に合算（write_expense_summary と同じ方針）。
+
+        Returns:
+            [{"department": "営業1部", "shinkansen": 12345, "train": 6789,
+              "car": 0, "airplane": 0, "hotel": 5000, "total": 24134, "headcount": 5}, ...]
+            合計降順ソート
+        """
+        dept_data: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        dept_people: dict[str, set] = defaultdict(set)
+
+        for normalized_name, categories in self._data.items():
+            info = self._master[normalized_name]
+            dept = info["department"]
+            dept_people[dept].add(normalized_name)
+
+            for group_key, sub_keys in self.DEPT_CATEGORY_GROUPS.items():
+                for sub_key in sub_keys:
+                    dept_data[dept][group_key] += categories.get(sub_key, 0)
+
+        rows = []
+        for dept, cats in dept_data.items():
+            total = sum(cats.values())
+            if total == 0:
+                continue
+            rows.append({
+                "department": dept,
+                "shinkansen": cats.get("shinkansen", 0),
+                "train": cats.get("train", 0),
+                "car": cats.get("car", 0),
+                "airplane": cats.get("airplane", 0),
+                "hotel": cats.get("hotel", 0),
+                "total": total,
+                "headcount": len(dept_people[dept]),
+            })
+
         rows.sort(key=lambda x: x["total"], reverse=True)
         return rows
 

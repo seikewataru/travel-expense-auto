@@ -1,0 +1,216 @@
+"use client";
+
+import { useState } from "react";
+import { apiPost, type DeptROIResponse } from "@/lib/api";
+import MetricCard from "./MetricCard";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
+
+const now = new Date();
+
+function yen(n: number) {
+  return `¥${n.toLocaleString()}`;
+}
+
+export default function DeptROITab() {
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(Math.max(1, now.getMonth()));
+  const [loading, setLoading] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const [result, setResult] = useState<DeptROIResponse | null>(null);
+  const [error, setError] = useState("");
+  const [writeMsg, setWriteMsg] = useState("");
+
+  const run = async () => {
+    setLoading(true);
+    setError("");
+    setWriteMsg("");
+    try {
+      const res = await apiPost<DeptROIResponse>("/api/dept-roi", { year, month });
+      setResult(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "エラー");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const writeSheet = async () => {
+    setWriting(true);
+    setWriteMsg("");
+    try {
+      const res = await apiPost<{ message: string }>("/api/dept-roi/write", { year, month });
+      setWriteMsg(res.message);
+    } catch (e) {
+      setWriteMsg(e instanceof Error ? e.message : "エラー");
+    } finally {
+      setWriting(false);
+    }
+  };
+
+  const chartData = result?.departments.map((d) => ({
+    name: d.department,
+    旅費合計: d.total,
+    売上: d.sales,
+  }));
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold">部門別ROI</h2>
+          <p className="text-xs text-[var(--muted)] mt-0.5">部門ごとの旅費ROIを分析します</p>
+        </div>
+      </div>
+
+      {/* 設定 */}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+        <div className="flex items-end gap-6 flex-wrap">
+          <div>
+            <label className="block text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-1.5">年</label>
+            <input
+              type="number"
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+              className="w-24 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)]"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-1.5">月</label>
+            <input
+              type="number"
+              min={1}
+              max={12}
+              value={month}
+              onChange={(e) => setMonth(Number(e.target.value))}
+              className="w-20 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)]"
+            />
+          </div>
+          <button
+            onClick={run}
+            disabled={loading}
+            className="ml-auto rounded-lg bg-[var(--primary)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--primary-hover)] disabled:opacity-50 transition"
+          >
+            {loading ? "読み込み中..." : "分析実行"}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <>
+          {/* メトリクスカード */}
+          <div className="grid grid-cols-3 gap-4">
+            <MetricCard label="旅費合計" value={yen(result.totals.total_expense)} />
+            <MetricCard label="売上合計" value={yen(result.totals.total_sales)} />
+            <MetricCard
+              label="全体ROI"
+              value={`${result.totals.overall_roi}x`}
+              accent={result.totals.overall_roi >= 50 ? "success" : result.totals.overall_roi >= 10 ? "primary" : "warning"}
+            />
+          </div>
+
+          {/* テーブル */}
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden">
+            <div className="px-5 py-3 border-b border-[var(--border)] bg-slate-50/50">
+              <span className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider">
+                部門別ROI
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="border-b border-[var(--border)] text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider">
+                    <th className="px-5 py-2.5 text-left">部門</th>
+                    <th className="px-5 py-2.5 text-right">人数</th>
+                    <th className="px-5 py-2.5 text-right">新幹線</th>
+                    <th className="px-5 py-2.5 text-right">在来線</th>
+                    <th className="px-5 py-2.5 text-right">車移動</th>
+                    <th className="px-5 py-2.5 text-right">飛行機</th>
+                    <th className="px-5 py-2.5 text-right">宿泊費</th>
+                    <th className="px-5 py-2.5 text-right">旅費合計</th>
+                    <th className="px-5 py-2.5 text-right">売上</th>
+                    <th className="px-5 py-2.5 text-right">ROI</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.departments.map((d, i) => (
+                    <tr
+                      key={i}
+                      className="border-b border-[var(--border)] last:border-0 hover:bg-slate-50/50 transition"
+                    >
+                      <td className="px-5 py-2.5 font-medium">{d.department}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums">{d.headcount}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums">{d.shinkansen ? yen(d.shinkansen) : "—"}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums">{d.train ? yen(d.train) : "—"}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums">{d.car ? yen(d.car) : "—"}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums">{d.airplane ? yen(d.airplane) : "—"}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums">{d.hotel ? yen(d.hotel) : "—"}</td>
+                      <td className="px-5 py-2.5 text-right font-semibold tabular-nums">{yen(d.total)}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums">{yen(d.sales)}</td>
+                      <td className="px-5 py-2.5 text-right font-semibold tabular-nums">
+                        <span className={d.roi >= 50 ? "text-[var(--success)]" : d.roi >= 10 ? "text-[var(--primary)]" : "text-[var(--muted)]"}>
+                          {d.roi}x
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* グラフ */}
+          {chartData && chartData.length > 0 && (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+              <p className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
+                部門別 旅費合計 vs 売上
+              </p>
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={chartData} barGap={4}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 10000).toFixed(0)}万`} />
+                  <Tooltip
+                    formatter={(value) => yen(Number(value))}
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="旅費合計" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="売上" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* スプシ書き出し */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={writeSheet}
+              disabled={writing}
+              className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-xs font-medium hover:bg-slate-50 disabled:opacity-50 transition"
+            >
+              {writing ? "書き込み中..." : "スプレッドシートに書き出し"}
+            </button>
+            {writeMsg && (
+              <span className="text-xs text-[var(--success)]">{writeMsg}</span>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
