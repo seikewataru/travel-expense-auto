@@ -432,6 +432,16 @@ class SheetsClient:
 
     # セグメント判定ルール: (条件フィールド, キーワード, セグメントキー)
     # 上から順に評価、最初にマッチしたものを採用
+    # 個別オーバーライド: normalize_name(名前) -> セグメントキー
+    SEGMENT_OVERRIDES: dict[str, str] = {
+        "杉山 一彦": "ALLI",      # CRO室だがアライアンス営業本部扱い
+        "藤井 鈴菜": "スタジアム",  # 株式会社スタジアム
+        "高谷 莉子": "スタジアム",  # 株式会社スタジアム
+        "植松 あゆ美": "監査等委員",
+        "藤田 豪人": "監査等委員",
+        "村瀬 敬太": "監査等委員",
+    }
+
     # field: "dept"=部署_YYMM, "honbu"=本部, "roi"=ROI_分析用_YYMM(詳細版)
     SEGMENT_RULES = [
         ("dept", "Watchy", "Watchy"),
@@ -463,6 +473,8 @@ class SheetsClient:
         "BCC": "ビジネス共創部",
         "COM": "コミュニティ推進部",
         "Watchy": "Watchy事業部",
+        "スタジアム": "株式会社スタジアム",
+        "監査等委員": "監査等委員",
         "その他": "その他",
     }
 
@@ -541,6 +553,9 @@ class SheetsClient:
                     break
 
             normalized = normalize_name(name)
+            # 個別オーバーライド
+            if normalized in self.SEGMENT_OVERRIDES:
+                seg_key = self.SEGMENT_OVERRIDES[normalized]
             result[normalized] = seg_key
 
         from collections import Counter
