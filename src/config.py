@@ -1,4 +1,8 @@
-"""設定ロード — .env / st.secrets から認証情報を読み込む"""
+"""設定ロード — .env / st.secrets から認証情報を読み込む
+
+ログイン失敗時はパスワード管理シート（EX_CARD_MASTER_SHEET_ID, gid=1874845869）から
+最新の認証情報を再取得し、.envを更新する。
+"""
 
 import os
 from pathlib import Path
@@ -80,8 +84,108 @@ SALES_YOJITSU_GID = 1791092796  # 予実シート
 RINGI_SHEET_ID = "16dKIWWL-m8XtZeIw1acrv8ZvdKoZLM-7kbl8Fxr7_YA"  # 稟議一覧シート
 RINGI_SHEET_GID = 1556503880  # 稟議一覧タブ
 
+# パスワード管理シート
+CREDENTIALS_SHEET_ID = EX_CARD_MASTER_SHEET_ID  # 同一スプシ
+CREDENTIALS_GID = 1874845869  # 「スタメン」タブ
+
+# サービス名 → (Account検索キーワード, .envキーマッピング)
+CREDENTIALS_MAP = {
+    "racco": {
+        "keyword": "楽天 Racco",
+        "env_keys": {
+            "RACCO_CORP_ID": "corp_id",     # Password列から抽出
+            "RACCO_USERNAME": "username",    # Password列から抽出
+            "RACCO_PASSWORD": "password",    # Password列から抽出
+        },
+    },
+    "jalan": {
+        "keyword": "じゃらん法人",
+        "env_keys": {
+            "JALAN_CORP_ID": "login_name",
+            "JALAN_PASSWORD": "password",
+        },
+    },
+    "times": {
+        "keyword": "タイムズ24",
+        "env_keys": {
+            "TIMES_CONTRACT_ID": "login_name",
+            "TIMES_PASSWORD": "password",
+        },
+    },
+}
+
 # MF経費 事業者ID
 MF_OFFICE_IDS = {
     "stamen": "3eX7QWyXMWfqh1UffaF7Ng",
     "stage": "LzIfBpr3fz6OZfx5RZhdRw",
 }
+
+
+def refresh_credentials(service: str) -> dict[str, str]:
+    """パスワード管理シートから最新の認証情報を取得し、.envを更新する
+
+    Args:
+        service: "racco", "jalan", "times"
+
+    Returns:
+        {"env_key": "new_value", ...}
+    """
+    import gspread
+    import re
+
+    svc = CREDENTIALS_MAP.get(service)
+    if not svc:
+        raise ValueError(f"未知のサービス: {service}")
+
+    gc = gspread.service_account(filename=GCP_SERVICE_ACCOUNT_PATH)
+    sh = gc.open_by_key(CREDENTIALS_SHEET_ID)
+    ws = sh.get_worksheet_by_id(CREDENTIALS_GID)
+    all_values = ws.get_all_values()
+
+    # Account列（B列）でキーワード検索
+    target_row = None
+    for row in all_values[1:]:
+        account = row[1].strip() if len(row) > 1 else ""
+        if svc["keyword"] in account:
+            target_row = row
+            break
+
+    if not target_row:
+        raise RuntimeError(f"パスワードシートに '{svc['keyword']}' が見つかりません")
+
+    login_name = target_row[2].strip() if len(target_row) > 2 else ""
+    password_raw = target_row[3].strip() if len(target_row) > 3 else ""
+
+    # Racco は Password列に複数行（認証コード + パスワード）が入っている
+    result = {}
+    if service == "racco":
+        # 法人ID = login_name, 認証コード・パスワードはPassword列から抽出
+        result["RACCO_CORP_ID"] = login_name
+        # "上級管理者認証コード：xxx\n管理者用パスワード：yyy"
+        auth_match = re.search(r"認証コード[：:]\s*(\S+)", password_raw)
+        pass_match = re.search(r"パスワード[：:]\s*(\S+)", password_raw)
+        result["RACCO_USERNAME"] = auth_match.group(1) if auth_match else ""
+        result["RACCO_PASSWORD"] = pass_match.group(1) if pass_match else ""
+    else:
+        # じゃらん/タイムズ: login_name = Login Name, password = Password
+        for env_key, field in svc["env_keys"].items():
+            if field == "login_name":
+                result[env_key] = login_name
+            elif field == "password":
+                result[env_key] = password_raw
+
+    # .env ファイルを更新
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    env_content = env_path.read_text()
+    for env_key, new_val in result.items():
+        # 既存行を置換
+        pattern = re.compile(rf'^{env_key}=.*$', re.MULTILINE)
+        if pattern.search(env_content):
+            env_content = pattern.sub(f'{env_key}={new_val}', env_content)
+        # グローバル変数も更新
+        globals()[env_key] = new_val
+        os.environ[env_key] = new_val
+    env_path.write_text(env_content)
+
+    print(f"[Config] {service} 認証情報を更新: {', '.join(result.keys())}")
+    return result

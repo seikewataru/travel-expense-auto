@@ -101,7 +101,35 @@ class RaccoClient:
         )
         login_btn.first.click()
         page.wait_for_timeout(3000)
-        print("[Racco] ログイン完了")
+
+        # ログイン失敗チェック → パスワードシートから再取得してリトライ
+        # ※トップページのお知らせに「ログインできません」が含まれるためURLで判定
+        login_failed = "login" in page.url.lower().rsplit("/", 1)[-1]
+        if login_failed:
+            print("[Racco] ログイン失敗 — パスワードシートから最新認証情報を取得中...")
+            from src.config import refresh_credentials
+            creds = refresh_credentials("racco")
+            # リトライ
+            page.goto(RACCO_LOGIN_URL, wait_until="domcontentloaded")
+            page.wait_for_timeout(2000)
+            text_inputs = page.locator("input[type='text']")
+            pw_inputs = page.locator("input[type='password']")
+            text_inputs.nth(0).fill(creds.get("RACCO_CORP_ID", ""))
+            text_inputs.nth(1).fill(creds.get("RACCO_USERNAME", ""))
+            if pw_inputs.count() > 0:
+                pw_inputs.first.fill(creds.get("RACCO_PASSWORD", ""))
+            else:
+                text_inputs.nth(2).fill(creds.get("RACCO_PASSWORD", ""))
+            login_btn = page.locator(
+                "input[type='submit'], button:has-text('ログイン'), input[value*='ログイン']"
+            )
+            login_btn.first.click()
+            page.wait_for_timeout(3000)
+            if "login" in page.url.lower().rsplit("/", 1)[-1]:
+                raise RuntimeError("[Racco] パスワードシート更新後もログイン失敗。手動確認が必要です。")
+            print("[Racco] リトライ成功")
+        else:
+            print("[Racco] ログイン完了")
 
     def download_csv(self, year: int, month: int) -> Path:
         """宿泊実績CSVをダウンロードする

@@ -84,6 +84,26 @@ class TimesCarClient:
         login_btn.first.click()
         page.wait_for_timeout(3000)
 
+        # ログイン失敗チェック
+        body_text = page.locator("body").text_content() or ""
+        if "ログインできません" in body_text or "認証に失敗" in body_text or "エラー" in body_text and "login" in page.url.lower():
+            print("[Times] ログイン失敗 — パスワードシートから最新認証情報を取得中...")
+            from src.config import refresh_credentials
+            creds = refresh_credentials("times")
+            page.goto(TIMES_LOGIN_URL, wait_until="domcontentloaded")
+            page.wait_for_timeout(2000)
+            text_inputs = page.locator("input[type='text']")
+            text_inputs.nth(0).fill(creds.get("TIMES_CONTRACT_ID", ""))
+            text_inputs.nth(1).fill(TIMES_EMAIL)
+            page.locator("input[type='password']").first.fill(creds.get("TIMES_PASSWORD", ""))
+            login_btn = page.locator("input[type='submit'], button:has-text('ログイン'), input[value*='ログイン']")
+            login_btn.first.click()
+            page.wait_for_timeout(3000)
+            body_text = page.locator("body").text_content() or ""
+            if "ログインできません" in body_text or "認証に失敗" in body_text:
+                raise RuntimeError("[Times] パスワードシート更新後もログイン失敗。手動確認が必要です。")
+            print("[Times] リトライ成功")
+
         # ログイン後のモーダルポップアップを閉じる
         self._dismiss_popups(page)
 
@@ -93,10 +113,30 @@ class TimesCarClient:
         """ログイン後に表示されるお知らせモーダルを閉じる"""
         for _ in range(5):  # 複数のポップアップが連続する場合
             dismissed = False
-            for label in ["同意する", "確認", "閉じる", "OK"]:
+            # announce_box（お知らせオーバーレイ）を先に閉じる
+            announce = page.locator("#announce_box")
+            if announce.count() > 0 and announce.first.is_visible():
+                close_btn = announce.locator("a, button, input[type='button']")
+                if close_btn.count() > 0:
+                    close_btn.first.click(force=True)
+                    print("[Times] お知らせボックス閉じ")
+                    page.wait_for_timeout(1500)
+                    dismissed = True
+                    continue
+                # 閉じるボタンがなければJS で非表示にする
+                page.evaluate("document.getElementById('announce_box').style.display='none'")
+                print("[Times] お知らせボックス非表示（JS）")
+                page.wait_for_timeout(500)
+                dismissed = True
+                continue
+
+            for label in ["同意する", "閉じる", "OK", "確認"]:
                 btn = page.locator(f"button:has-text('{label}'), a:has-text('{label}'), input[value*='{label}']")
                 if btn.count() > 0 and btn.first.is_visible():
-                    btn.first.click()
+                    try:
+                        btn.first.click(timeout=5000)
+                    except Exception:
+                        btn.first.click(force=True)
                     print(f"[Times] ポップアップ閉じ: {label}")
                     page.wait_for_timeout(1500)
                     dismissed = True
@@ -134,16 +174,29 @@ class TimesCarClient:
             print("[Times] 既にご利用履歴ページにいます")
             return
 
+        # まだ残っているオーバーレイを強制非表示
+        page.evaluate("""
+            document.querySelectorAll('#CONTAINER > h3, #announce_box, .modal, .overlay').forEach(
+                el => el.style.display = 'none'
+            );
+        """)
+
         # ナビメニューから「ご利用履歴」をクリック
         usage_link = page.locator("a:has-text('ご利用履歴')")
         if usage_link.count() > 0:
-            usage_link.first.click()
+            try:
+                usage_link.first.click(timeout=5000)
+            except Exception:
+                usage_link.first.click(force=True)
             page.wait_for_timeout(2000)
 
         # ドロップダウンから「タイムズカー」を選択
         times_car_link = page.locator("a:has-text('タイムズカー'):not(:has-text('レンタル'))")
         if times_car_link.count() > 0:
-            times_car_link.first.click()
+            try:
+                times_car_link.first.click(timeout=5000)
+            except Exception:
+                times_car_link.first.click(force=True)
             page.wait_for_timeout(3000)
             print("[Times] タイムズカー利用履歴ページへ遷移完了")
         else:

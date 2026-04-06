@@ -103,16 +103,33 @@ class JalanClient:
             page.wait_for_timeout(5000)
 
         # ログイン成功チェック
-        if "Login" in page.url or "login" in page.url:
+        body = page.inner_text("body")
+        login_failed = ("認証に失敗" in body) or ("ログインできません" in body)
+        if login_failed:
+            print("[Jalan] ログイン失敗 — パスワードシートから最新認証情報を取得中...")
+            from src.config import refresh_credentials
+            creds = refresh_credentials("jalan")
+            # リトライ
+            page.goto(JALAN_LOGIN_URL, wait_until="domcontentloaded")
+            page.wait_for_timeout(2000)
+            text_inputs = page.locator("input[type='text']")
+            pw_inputs = page.locator("input[type='password']")
+            if text_inputs.count() > 0:
+                text_inputs.first.click()
+                text_inputs.first.fill("")
+                text_inputs.first.type(creds.get("JALAN_CORP_ID", ""), delay=50)
+            if pw_inputs.count() > 0:
+                pw_inputs.first.click()
+                pw_inputs.first.fill("")
+                pw_inputs.first.type(creds.get("JALAN_PASSWORD", ""), delay=50)
+            login_btn = page.locator("input[value*='ログイン']")
+            if login_btn.count() > 0:
+                login_btn.first.click()
+                page.wait_for_timeout(5000)
             body = page.inner_text("body")
-            if "エラー" in body or "パスワード" in body:
-                print(f"[Jalan] ログイン失敗の可能性あり。URL: {page.url}")
-                # エラーメッセージを表示
-                font_err = page.locator("font[color]")
-                if font_err.count() > 0:
-                    print(f"[Jalan] エラー: {font_err.first.inner_text()}")
-            else:
-                print(f"[Jalan] WARNING: まだログインページにいます。URL: {page.url}")
+            if "認証に失敗" in body:
+                raise RuntimeError("[Jalan] パスワードシート更新後もログイン失敗。手動確認が必要です。")
+            print("[Jalan] リトライ成功")
         else:
             print("[Jalan] ログイン完了")
 
@@ -230,14 +247,23 @@ class JalanClient:
         dl_btn = page.locator("input[value='ファイルダウンロード'], input[value*='ファイルダウンロード']")
         if dl_btn.count() > 0:
             print("[Jalan] 「ファイルダウンロード」ボタンを検出 — 直接ダウンロード")
-            with page.expect_download(timeout=30000) as download_info:
-                dl_btn.first.click()
-
-            download = download_info.value
-            save_path = EX_DATA_DIR / f"jalan_{year}_{month:02d}.csv"
-            download.save_as(str(save_path))
-            print(f"[Jalan] CSVダウンロード完了: {save_path}")
-            return save_path
+            try:
+                with page.expect_download(timeout=15000) as download_info:
+                    dl_btn.first.click()
+                download = download_info.value
+                save_path = EX_DATA_DIR / f"jalan_{year}_{month:02d}.csv"
+                download.save_as(str(save_path))
+                print(f"[Jalan] CSVダウンロード完了: {save_path}")
+                return save_path
+            except Exception:
+                # クリック後にデータなし画面に遷移するケース
+                body_after = page.inner_text("body")
+                if "宿泊予約は存在しません" in body_after:
+                    print(f"[Jalan] {year}年{month}月のデータなし（ダウンロード後判定）")
+                    save_path = EX_DATA_DIR / f"jalan_{year}_{month:02d}.csv"
+                    save_path.write_text("")
+                    return save_path
+                raise
 
         # 方法2: 「予約データ一覧画面へ」→ 一覧ページでCSV DL
         list_btn = page.locator("input[name='btnChange'][value='予約データ一覧画面へ']")
