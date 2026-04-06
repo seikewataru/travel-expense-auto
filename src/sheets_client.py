@@ -196,15 +196,23 @@ class SheetsClient:
                 segments[seg] = []
             segments[seg].append(r)
 
-        # セグメント順序（旅費合計降順）
-        seg_order = sorted(segments.keys(),
-                           key=lambda s: sum(sum(self._calc_row_values(r)) for r in segments[s]),
-                           reverse=True)
+        # セグメント順序: 売上責任セグメント先、その他・スタジアム・監査等委員は最後
+        FIXED_ORDER = ["SDR", "BDR", "ALLI", "CCS", "UNI", "UCS", "事業開発", "BCC", "COM", "Watchy"]
+        seg_order = [s for s in FIXED_ORDER if s in segments]
+        # 残り（その他、スタジアム、監査等委員等）を末尾に
+        for s in segments:
+            if s not in seg_order:
+                seg_order.append(s)
 
-        # --- シートをクリアしてから書き直す ---
-        # Row 1: 年ヘッダー
-        # Row 2: 月ヘッダー
-        # Row 3: カラムヘッダー
+        # --- 書式リセット + ヘッダー書き込み ---
+        # 既存データ・書式をクリア（A〜I列、3行目以降）
+        max_row = max(len(ws.col_values(2)), 300)
+        ws.batch_clear([f"A4:I{max_row}"])
+        ws.format(f"A4:I{max_row}", {
+            "backgroundColor": {"red": 1, "green": 1, "blue": 1},
+            "textFormat": {"bold": False, "foregroundColor": {"red": 0, "green": 0, "blue": 0}, "fontSize": 9},
+        })
+
         ws.update_cell(1, month_col_start + 1, f"{year}~")
         ws.update_cell(2, month_col_start + 1, f"{month}月")
 
@@ -604,9 +612,9 @@ class SheetsClient:
         "SDR": "SDR_月次新規獲得売上",
         "BDR": "BDR_月次新規獲得売上",
         "ALLI": "ALLI_月次新規獲得売上",
-        "CCS": "CCS_増減MRR",
+        "CCS": "CCS_保有MRR",          # CS本部は保有MRR（守っている売上）で評価
         "UNI": "UNI_月次新規獲得売上",
-        "UCS": "UCS_増減MRR",
+        "UCS": "UCS_保有MRR",          # UNION CSも保有MRRで評価
         "事業開発": "SH_合計売上",
         "COM": "COM_合計収益",
         # Watchyは別スプシ — read_segment_sales で個別対応
@@ -771,6 +779,10 @@ class SheetsClient:
         try:
             ws = sh.worksheet(tab_title)
             ws.clear()
+            ws.format("A1:J100", {
+                "backgroundColor": {"red": 1, "green": 1, "blue": 1},
+                "textFormat": {"bold": False, "foregroundColor": {"red": 0, "green": 0, "blue": 0}, "fontSize": 10},
+            })
         except gspread.exceptions.WorksheetNotFound:
             ws = sh.add_worksheet(title=tab_title, rows=100, cols=12)
 
