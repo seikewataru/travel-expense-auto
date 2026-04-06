@@ -84,9 +84,11 @@ SALES_YOJITSU_GID = 1791092796  # 予実シート
 RINGI_SHEET_ID = "16dKIWWL-m8XtZeIw1acrv8ZvdKoZLM-7kbl8Fxr7_YA"  # 稟議一覧シート
 RINGI_SHEET_GID = 1556503880  # 稟議一覧タブ
 
-# パスワード管理シート
+# パスワード管理シート（2箇所）
 CREDENTIALS_SHEET_ID = EX_CARD_MASTER_SHEET_ID  # 同一スプシ
 CREDENTIALS_GID = 1874845869  # 「スタメン」タブ
+CREDENTIALS_SHEET_ID_2 = "1lvHOGEaSBZ0qMOSCc3i0B79K1_TXce300R8FQ0mBWTI"  # 別管理シート
+CREDENTIALS_GID_2 = 468893395
 
 # サービス名 → (Account検索キーワード, .envキーマッピング)
 CREDENTIALS_MAP = {
@@ -99,7 +101,8 @@ CREDENTIALS_MAP = {
         },
     },
     "jalan": {
-        "keyword": "じゃらん法人",
+        "keyword": "じゃらん",
+        "match_keywords": ["じゃらん法人", "じゃらん：法人WEB"],  # 複数シートで名称が異なる
         "env_keys": {
             "JALAN_CORP_ID": "login_name",
             "JALAN_PASSWORD": "password",
@@ -138,17 +141,29 @@ def refresh_credentials(service: str) -> dict[str, str]:
         raise ValueError(f"未知のサービス: {service}")
 
     gc = gspread.service_account(filename=GCP_SERVICE_ACCOUNT_PATH)
-    sh = gc.open_by_key(CREDENTIALS_SHEET_ID)
-    ws = sh.get_worksheet_by_id(CREDENTIALS_GID)
-    all_values = ws.get_all_values()
 
-    # Account列（B列）でキーワード検索
+    # シート1 → シート2 の順に検索
+    sheets_to_search = [
+        (CREDENTIALS_SHEET_ID, CREDENTIALS_GID, "シート1"),
+        (CREDENTIALS_SHEET_ID_2, CREDENTIALS_GID_2, "シート2"),
+    ]
+
     target_row = None
-    for row in all_values[1:]:
-        account = row[1].strip() if len(row) > 1 else ""
-        if svc["keyword"] in account:
-            target_row = row
-            break
+    for sheet_id, gid, label in sheets_to_search:
+        try:
+            sh = gc.open_by_key(sheet_id)
+            ws = sh.get_worksheet_by_id(gid)
+            all_values = ws.get_all_values()
+            for row in all_values[1:]:
+                account = row[1].strip() if len(row) > 1 else ""
+                if svc["keyword"] in account or any(kw in account for kw in svc.get("match_keywords", [])):
+                    target_row = row
+                    print(f"[Config] {service} 認証情報を{label}で発見: {account}")
+                    break
+            if target_row:
+                break
+        except Exception as e:
+            print(f"[Config] {label}の読み込みエラー: {e}")
 
     if not target_row:
         raise RuntimeError(f"パスワードシートに '{svc['keyword']}' が見つかりません")
