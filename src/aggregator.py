@@ -174,6 +174,18 @@ class ExpenseAggregator:
         if excluded:
             print(f"  EXカード除外（貸出用等）: {excluded}件")
 
+    def add_ex_card_accounting(self, records: list[dict]) -> None:
+        """除外対象シートベースのEXカードデータを追加（乗車日基準・PL税抜一致）
+
+        read_ex_card_accounting() の返り値を受け取り、カテゴリ別に集計する。
+        EXカードCSV + 福利厚生振替の後付けロジックを置き換える。
+
+        records: [{"name": "山田 太郎", "amount": 12345, "category": "shinkansen"}, ...]
+        """
+        for r in records:
+            self._add(r["name"], r["category"], r["amount"], "EXカード（計上シート）")
+        print(f"  EXカード（計上シート）: {len(records)}件追加")
+
     # 稟議振替分類 → カテゴリサフィックスのマッピング
     RINGI_TRANSFER_MAP: dict[str, dict[str, str]] = {
         # ringi_category -> {original_category -> transferred_category}

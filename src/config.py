@@ -84,6 +84,10 @@ SALES_YOJITSU_GID = 1791092796  # 予実シート
 RINGI_SHEET_ID = "16dKIWWL-m8XtZeIw1acrv8ZvdKoZLM-7kbl8Fxr7_YA"  # 稟議一覧シート
 RINGI_SHEET_GID = 1556503880  # 稟議一覧タブ
 
+# EXカード除外対象シート（福利厚生振替判定用）
+EX_EXCLUSION_SHEET_ID = "1YWyDrpyHPq2MHoHeBHwQ2W-ouDg8Kqn7aW5vPLyMfzQ"
+EX_EXCLUSION_GID = 2017086761  # 新幹線代_エクスプレス タブ
+
 # パスワード管理シート（2箇所）
 CREDENTIALS_SHEET_ID = EX_CARD_MASTER_SHEET_ID  # 同一スプシ
 CREDENTIALS_GID = 1874845869  # 「スタメン」タブ

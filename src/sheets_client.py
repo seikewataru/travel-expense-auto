@@ -10,6 +10,8 @@ from src.config import (
     DEPT_MASTER_SHEET_ID,
     EX_CARD_MASTER_GID,
     EX_CARD_MASTER_SHEET_ID,
+    EX_EXCLUSION_GID,
+    EX_EXCLUSION_SHEET_ID,
     GCP_SERVICE_ACCOUNT_PATH,
     OUTPUT_SHEET_ID,
     RINGI_SHEET_GID,
@@ -138,6 +140,90 @@ class SheetsClient:
 
         print(f"[Sheets] EXカードマスタ読み込み完了: {len(result)}件（除外: {len(exclude_ids)}件）")
         return result, exclude_ids, category_map
+
+    # 除外対象シートの集計種別 → 仕訳カテゴリ
+    _EX_SHEET_CATEGORY_MAP: dict[str, str] = {
+        "個人貸与": "shinkansen",
+        "広告関連貸出用": "shinkansen_ad",
+        "部門貸出用": "shinkansen_subsidiary",
+    }
+
+    # 除外対象シートの「実際の利用者」→ 子会社名マッピング
+    _EX_SUBSIDIARY_MAP: dict[str, str] = {
+        "スタジアム": "株式会社スタジアム",
+    }
+
+    def read_ex_card_accounting(self, year: int, month: int) -> list[dict]:
+        """除外対象シートからEXカード計上データを読み込む（乗車日基準・PL税抜一致）
+
+        経理が手動で乗車日基準の年月・税抜額・振替分類を設定済みのシートから
+        そのまま読み込むことで、期間ずれ・税端数差を解消する。
+
+        Args:
+            year: 対象年
+            month: 対象月
+
+        Returns:
+            [{"name": "山田 太郎", "amount": 12345, "category": "shinkansen"}, ...]
+        """
+        from src.aggregator import normalize_name
+
+        sh = self._gc.open_by_key(EX_EXCLUSION_SHEET_ID)
+        ws = sh.get_worksheet_by_id(EX_EXCLUSION_GID)
+        all_values = ws.get_all_values()
+
+        # 列: [43]=年月, [45]=計上額（税抜）, [46]=現カード所持者, [47]=集計種別, [48]=実際の利用者
+        target_ym = f"{year}-{month:02d}"
+        records: list[dict] = []
+
+        for row in all_values[1:]:
+            if len(row) <= 48:
+                continue
+            ym = row[43].strip()
+            if ym != target_ym:
+                continue
+            amount_str = row[45].replace(",", "").strip()
+            amount = int(float(amount_str)) if amount_str else 0
+            if amount == 0:
+                continue
+
+            holder = row[46].strip()
+            sheet_category = row[47].strip()
+            actual_user = row[48].strip()
+
+            # カテゴリ決定
+            if "福利厚生" in actual_user:
+                category = "shinkansen_welfare"
+                name = holder
+            elif sheet_category == "広告関連貸出用":
+                category = "shinkansen_ad"
+                name = holder
+            elif sheet_category == "部門貸出用":
+                # スタジアムのみ子会社振替、それ以外は通常扱い（PL準拠）
+                if actual_user in self._EX_SUBSIDIARY_MAP:
+                    category = "shinkansen_subsidiary"
+                    name = self._EX_SUBSIDIARY_MAP[actual_user]
+                else:
+                    category = "shinkansen"
+                    name = actual_user if actual_user else holder
+            else:
+                # 個人貸与: 現カード所持者 = 実際の利用者
+                category = "shinkansen"
+                name = holder
+
+            if not name:
+                continue
+            records.append({"name": name, "amount": amount, "category": category})
+
+        # 集計ログ
+        from collections import Counter
+        cat_totals: dict[str, int] = {}
+        for r in records:
+            cat_totals[r["category"]] = cat_totals.get(r["category"], 0) + r["amount"]
+        total = sum(cat_totals.values())
+        cat_str = ", ".join(f"{k}=¥{v:,}" for k, v in sorted(cat_totals.items()))
+        print(f"[Sheets] EXカード計上データ読み込み完了: {len(records)}件, ¥{total:,} ({cat_str})")
+        return records
 
     # ROIタブの月ごとのカラム構成（6列/月: 新幹線, 在来線, 車移動, 飛行機, 宿泊費, 合計）
     ROI_COLS_PER_MONTH = 6

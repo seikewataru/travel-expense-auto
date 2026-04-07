@@ -193,27 +193,17 @@ def cmd_aggregate(args: argparse.Namespace) -> None:
     sheets = SheetsClient()
     dept_master = sheets.read_department_master(year, month)
     ex_card_master, ex_card_exclude_ids, ex_card_category_map = sheets.read_ex_card_master()
+    ringi_lookup = sheets.read_ringi_lookup()
 
-    agg = ExpenseAggregator(dept_master, ex_card_master=ex_card_master, ex_card_exclude_ids=ex_card_exclude_ids, ex_card_category_map=ex_card_category_map)
+    agg = ExpenseAggregator(dept_master, ex_card_master=ex_card_master, ex_card_exclude_ids=ex_card_exclude_ids, ex_card_category_map=ex_card_category_map, ringi_lookup=ringi_lookup)
 
     # 2. 各ソースCSV取得（--skip-fetch なら既存CSVを使用）
     data_dir = EX_DATA_DIR
 
-    # EXカード
-    ex_csv = data_dir / f"ex_{year}_{month:02d}.csv"
-    if not args.skip_fetch:
-        from src.ex_card import EXCardClient
-        print("\n--- EXカード取得 ---")
-        with EXCardClient() as client:
-            client.login()
-            ex_csv = client.download_csv(year, month)
-    if ex_csv.exists():
-        from src.ex_card import EXCardClient
-        ex_records = EXCardClient.parse_csv(ex_csv)
-        agg.add_ex_card(ex_records)
-        print(f"  EXカード: {len(ex_records)}件追加")
-    else:
-        print(f"  EXカード: CSVなし ({ex_csv})")
+    # EXカード（除外対象シートから乗車日基準・PL税抜一致のデータを使用）
+    print("\n--- EXカード（除外対象シート）---")
+    ex_accounting = sheets.read_ex_card_accounting(year, month)
+    agg.add_ex_card_accounting(ex_accounting)
 
     # タイムズカー
     times_csv = data_dir / f"times_{year}_{month:02d}.csv"
