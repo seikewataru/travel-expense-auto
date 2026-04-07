@@ -271,6 +271,28 @@ def cmd_aggregate(args: argparse.Namespace) -> None:
     agg.add_mf_expense(mf_records)
     print(f"  MF経費合計: {len(mf_records)}件追加")
 
+    # 3.5. MF会計Plus — PL差引額で航空機を補完（UPSIDER分）
+    print("\n--- MF会計Plus（PL補完）---")
+    try:
+        from src.mf_accounting import get_all_journals, S05_ACCOUNT_ID, S05_SUB_IDS
+        journals = get_all_journals(year, month)
+        airplane_sub = S05_SUB_IDS["S0506_交通費（航空機）"]
+        airplane_debit = 0
+        airplane_credit = 0
+        for j in journals:
+            for b in j.get("branches", []):
+                d = b.get("debitor", {})
+                c = b.get("creditor", {})
+                if d.get("account_id") == S05_ACCOUNT_ID and d.get("sub_account_id") == airplane_sub:
+                    airplane_debit += d.get("value", 0)
+                if c.get("account_id") == S05_ACCOUNT_ID and c.get("sub_account_id") == airplane_sub:
+                    airplane_credit += c.get("value", 0)
+        pl_airplane = airplane_debit - airplane_credit
+        print(f"  PL S0506_航空機: ¥{pl_airplane:,}（借方¥{airplane_debit:,} - 貸方¥{airplane_credit:,}）")
+        agg.add_pl_supplement(pl_airplane, "airplane", "UPSIDER（航空機）")
+    except Exception as e:
+        print(f"  MF会計Plus取得エラー（スキップ）: {e}")
+
     # 4. 集計
     print("\n--- 集計結果 ---")
     summary = agg.summarize()

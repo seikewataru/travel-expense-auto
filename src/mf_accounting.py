@@ -188,6 +188,67 @@ def get_journals(year: int, month: int) -> list[dict]:
     })
 
 
+def get_all_journals(year: int, month: int) -> list[dict]:
+    """指定月の仕訳を全件取得（ページネーション対応）"""
+    import calendar
+    last_day = calendar.monthrange(year, month)[1]
+    start = f"{year}-{month:02d}-01"
+    end = f"{year}-{month:02d}-{last_day}"
+
+    all_journals = []
+    cursor = None
+    while True:
+        params = {"start_date": start, "end_date": end}
+        if cursor:
+            params["cursor"] = cursor
+        data = api_get("/journals", params=params)
+        all_journals.extend(data.get("journals", []))
+        cursor = data.get("next_cursor")
+        if not cursor:
+            break
+    return all_journals
+
+
+# S05_旅費交通費の勘定科目・補助科目ID
+S05_ACCOUNT_ID = 226862
+S05_SUB_IDS = {
+    "S0501_通勤手当": 641747,
+    "S0502_交通費（公共交通機関）": 647741,
+    "S0503_交通費（新幹線）": 647742,
+    "S0504_交通費（タクシー）": 647743,
+    "S0505_交通費（カーシェア）": 647744,
+    "S0506_交通費（航空機）": 647745,
+    "S0507_宿泊費": 647746,
+}
+
+
+def get_non_expense_entries(year: int, month: int, sub_account_id: int) -> list[dict]:
+    """MF経費連携以外の仕訳明細を取得する
+
+    MF経費から自動連携された仕訳（creator=システムユーザー）を除外し、
+    UPSIDERカード等の手動計上分のみを返す。
+
+    Returns:
+        [{"date": "2026-01-14", "value": 105860, "remark": "...", "creator": "..."}, ...]
+    """
+    journals = get_all_journals(year, month)
+    entries = []
+    for j in journals:
+        creator = j.get("creator", "")
+        if creator == "システムユーザー":
+            continue
+        for b in j.get("branches", []):
+            d = b.get("debitor", {})
+            if d.get("account_id") == S05_ACCOUNT_ID and d.get("sub_account_id") == sub_account_id:
+                entries.append({
+                    "date": j["transaction_date"],
+                    "value": d.get("value", 0),
+                    "remark": b.get("remark", ""),
+                    "creator": creator,
+                })
+    return entries
+
+
 def get_office_info() -> dict:
     """事業者情報を取得（認可サーバーAPI経由）"""
     token = get_access_token()

@@ -284,6 +284,34 @@ class ExpenseAggregator:
         if transferred:
             print(f"  じゃらん 稟議振替: {transferred}件")
 
+    def add_pl_supplement(self, pl_value: int, category: str, label: str) -> None:
+        """PL値と集計値の差分を「未帰属」として補完する
+
+        MF経費で個人帰属済みの集計値と、MF会計PlusのPL正値の差分を
+        UPSIDER等の未帰属分として追加し、合計をPLに合わせる。
+
+        Args:
+            pl_value: MF会計PlusのPL差引額（税抜）
+            category: 補完するカテゴリ（例: "airplane"）
+            label: ラベル（例: "UPSIDER（航空機）"）
+        """
+        # 現在の集計値を算出
+        current = 0
+        for categories in self._data.values():
+            current += categories.get(category, 0)
+        diff = pl_value - current
+        if diff <= 0:
+            print(f"  PL補完（{label}）: 不要（集計¥{current:,} >= PL¥{pl_value:,}）")
+            return
+        # 未帰属としてマスタに注入
+        normalized = normalize_name(label)
+        if normalized not in self._master:
+            self._master[normalized] = {
+                "emp_no": "-", "department": "（PL補完）", "raw_name": label,
+            }
+        self._data[normalized][category] += diff
+        print(f"  PL補完（{label}）: ¥{diff:,}（PL¥{pl_value:,} - 集計¥{current:,}）")
+
     def add_times_car(self, records: list[dict]) -> None:
         """タイムズカーデータ → その他カテゴリ
 
