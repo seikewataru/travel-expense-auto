@@ -174,34 +174,51 @@ class TimesCarClient:
             print("[Times] 既にご利用履歴ページにいます")
             return
 
-        # まだ残っているオーバーレイを強制非表示
+        # まだ残っているオーバーレイ・ポップアップを強制非表示
         page.evaluate("""
-            document.querySelectorAll('#CONTAINER > h3, #announce_box, .modal, .overlay').forEach(
-                el => el.style.display = 'none'
-            );
+            document.querySelectorAll(
+                '#CONTAINER > h3, #announce_box, .modal, .overlay, ' +
+                '[class*="popup"], [class*="Popup"], [id*="popup"], [id*="Popup"], ' +
+                '[class*="dialog"], [class*="Dialog"], ' +
+                '.fancybox-overlay, .fancybox-wrap, ' +
+                '[style*="z-index"][style*="position: fixed"], ' +
+                '[style*="z-index"][style*="position: absolute"]'
+            ).forEach(el => {
+                el.style.display = 'none';
+                el.style.visibility = 'hidden';
+            });
         """)
+        page.wait_for_timeout(500)
 
-        # ナビメニューから「ご利用履歴」をクリック
+        # ナビメニューから「ご利用履歴」をホバーしてサブメニュー展開
         usage_link = page.locator("a:has-text('ご利用履歴')")
         if usage_link.count() > 0:
-            try:
-                usage_link.first.click(timeout=5000)
-            except Exception:
+            usage_link.first.hover()
+            page.wait_for_timeout(1000)
+            # ホバーでサブメニューが出ない場合はクリック
+            times_car_link = page.locator("a:has-text('タイムズカー'):not(:has-text('レンタル'))")
+            if times_car_link.count() == 0 or not times_car_link.first.is_visible():
                 usage_link.first.click(force=True)
-            page.wait_for_timeout(2000)
+                page.wait_for_timeout(2000)
 
-        # ドロップダウンから「タイムズカー」を選択
+        # サブメニューから「タイムズカー」をクリック
         times_car_link = page.locator("a:has-text('タイムズカー'):not(:has-text('レンタル'))")
         if times_car_link.count() > 0:
-            try:
-                times_car_link.first.click(timeout=5000)
-            except Exception:
+            # サブメニュー内のリンクを可視化して直接遷移
+            target_href = times_car_link.first.get_attribute("href")
+            if target_href:
+                print(f"[Times] タイムズカーリンクURL: {target_href}")
+                page.goto(target_href if target_href.startswith("http") else f"https://plus.timescar.jp{target_href}")
+            else:
                 times_car_link.first.click(force=True)
             page.wait_for_timeout(3000)
             print("[Times] タイムズカー利用履歴ページへ遷移完了")
         else:
-            print(f"[Times] 現在のURL: {page.url}")
-            raise RuntimeError("タイムズカーリンクが見つかりません")
+            # フォールバック: 直接URLで遷移
+            print("[Times] サブメニューが見つからないため直接URL遷移")
+            page.goto("https://share.timescar.jp/view/corporation/use/list.jsp")
+            page.wait_for_timeout(3000)
+            print("[Times] タイムズカー利用履歴ページへ遷移完了")
 
     def _download_month_csv(self, page: Page, year: int, month: int) -> Path:
         """対象月のCSVダウンロードボタンをクリック"""
