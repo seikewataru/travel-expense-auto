@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { apiPost, type DeptROIResponse } from "@/lib/api";
+import { usePersistedResult } from "@/lib/usePersistedResult";
 import MetricCard from "./MetricCard";
 import {
   BarChart,
@@ -25,7 +26,9 @@ export default function DeptROITab() {
   const [month, setMonth] = useState(Math.max(1, now.getMonth()));
   const [loading, setLoading] = useState(false);
   const [writing, setWriting] = useState(false);
-  const [result, setResult] = useState<DeptROIResponse | null>(null);
+  const storageKey = `dept-roi-result-${year}-${String(month).padStart(2, "0")}`;
+  const seedUrl = `/dept-roi-result-${year}-${String(month).padStart(2, "0")}.json`;
+  const { result, fetchedAt, saveResult } = usePersistedResult<DeptROIResponse>(storageKey, seedUrl);
   const [error, setError] = useState("");
   const [writeMsg, setWriteMsg] = useState("");
 
@@ -35,7 +38,7 @@ export default function DeptROITab() {
     setWriteMsg("");
     try {
       const res = await apiPost<DeptROIResponse>("/api/dept-roi", { year, month });
-      setResult(res);
+      saveResult(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラー");
     } finally {
@@ -94,13 +97,18 @@ export default function DeptROITab() {
               className="w-20 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)]"
             />
           </div>
-          <button
-            onClick={run}
-            disabled={loading}
-            className="ml-auto rounded-lg bg-[var(--primary)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--primary-hover)] disabled:opacity-50 transition"
-          >
-            {loading ? "読み込み中..." : "分析実行"}
-          </button>
+          <div className="ml-auto flex items-center gap-3">
+            {fetchedAt && (
+              <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
+            )}
+            <button
+              onClick={run}
+              disabled={loading}
+              className="rounded-lg bg-[var(--primary)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--primary-hover)] disabled:opacity-50 transition"
+            >
+              {loading ? "読み込み中..." : "分析実行"}
+            </button>
+          </div>
         </div>
       </div>
 

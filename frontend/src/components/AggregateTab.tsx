@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { apiPost, type AggregateResponse } from "@/lib/api";
+import { usePersistedResult } from "@/lib/usePersistedResult";
 import MetricCard from "./MetricCard";
 
 const now = new Date();
@@ -30,7 +31,9 @@ export default function AggregateTab() {
   });
   const [dryRun, setDryRun] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AggregateResponse | null>(null);
+  const storageKey = `aggregate-result-${year}-${String(month).padStart(2, "0")}`;
+  const seedUrl = `/aggregate-result-${year}-${String(month).padStart(2, "0")}.json`;
+  const { result, fetchedAt, saveResult } = usePersistedResult<AggregateResponse>(storageKey, seedUrl);
   const [scope, setScope] = useState<(typeof SCOPES)[number]>("全体");
   const [error, setError] = useState("");
 
@@ -41,7 +44,7 @@ export default function AggregateTab() {
       const res = await apiPost<AggregateResponse>("/api/aggregate", {
         year, month, ...sources, dry_run: dryRun,
       });
-      setResult(res);
+      saveResult(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "不明なエラー");
     } finally {
@@ -126,6 +129,9 @@ export default function AggregateTab() {
             />
             dry-run（シート書き込みなし）
           </label>
+          {fetchedAt && (
+            <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
+          )}
           <button
             onClick={run}
             disabled={loading}

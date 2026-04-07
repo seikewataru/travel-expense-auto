@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { apiPost, type ROIResponse } from "@/lib/api";
+import { usePersistedResult } from "@/lib/usePersistedResult";
 import MetricCard from "./MetricCard";
 import {
   BarChart,
@@ -26,7 +27,8 @@ export default function ROITab() {
   const [demo, setDemo] = useState(false);
   const [loading, setLoading] = useState(false);
   const [writing, setWriting] = useState(false);
-  const [result, setResult] = useState<ROIResponse | null>(null);
+  const storageKey = `roi-result-${year}-${String(month).padStart(2, "0")}`;
+  const { result, fetchedAt, saveResult } = usePersistedResult<ROIResponse>(storageKey);
   const [error, setError] = useState("");
   const [writeMsg, setWriteMsg] = useState("");
 
@@ -36,7 +38,7 @@ export default function ROITab() {
     setWriteMsg("");
     try {
       const res = await apiPost<ROIResponse>("/api/roi", { year, month, demo });
-      setResult(res);
+      saveResult(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラー");
     } finally {
@@ -106,13 +108,18 @@ export default function ROITab() {
             />
             デモデータ
           </label>
-          <button
-            onClick={run}
-            disabled={loading}
-            className="ml-auto rounded-lg bg-[var(--primary)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--primary-hover)] disabled:opacity-50 transition"
-          >
-            {loading ? "読み込み中..." : "ROI分析実行"}
-          </button>
+          <div className="ml-auto flex items-center gap-3">
+            {fetchedAt && (
+              <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
+            )}
+            <button
+              onClick={run}
+              disabled={loading}
+              className="rounded-lg bg-[var(--primary)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--primary-hover)] disabled:opacity-50 transition"
+            >
+              {loading ? "読み込み中..." : "ROI分析実行"}
+            </button>
+          </div>
         </div>
       </div>
 

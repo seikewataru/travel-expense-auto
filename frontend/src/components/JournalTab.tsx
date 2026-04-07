@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { apiPost } from "@/lib/api";
+import { usePersistedResult } from "@/lib/usePersistedResult";
 
 const now = new Date();
 
@@ -13,6 +14,7 @@ export default function JournalTab() {
   const [csvReady, setCsvReady] = useState(false);
   const [csvData, setCsvData] = useState("");
   const [log, setLog] = useState<string[]>([]);
+  const { fetchedAt, saveResult } = usePersistedResult<{ generated: true }>("journal-result");
 
   const generate = async () => {
     setLoading(true);
@@ -25,6 +27,7 @@ export default function JournalTab() {
       setCsvData(res.csv);
       setLog(res.log);
       setCsvReady(true);
+      saveResult({ generated: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラー");
     } finally {
@@ -71,6 +74,9 @@ export default function JournalTab() {
               className="w-20 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)]"
             />
           </div>
+          {fetchedAt && (
+            <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
+          )}
           <button
             onClick={generate}
             disabled={loading}

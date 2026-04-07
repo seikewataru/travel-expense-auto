@@ -290,15 +290,7 @@ class SheetsClient:
             if s not in seg_order:
                 seg_order.append(s)
 
-        # --- 書式リセット + ヘッダー書き込み ---
-        # 既存データ・書式をクリア（A〜I列、3行目以降）
-        max_row = max(len(ws.col_values(2)), 300)
-        ws.batch_clear([f"A4:I{max_row}"])
-        ws.format(f"A4:I{max_row}", {
-            "backgroundColor": {"red": 1, "green": 1, "blue": 1},
-            "textFormat": {"bold": False, "foregroundColor": {"red": 0, "green": 0, "blue": 0}, "fontSize": 9},
-        })
-
+        # --- ヘッダー書き込み ---
         ws.update_cell(1, month_col_start + 1, f"{year}~")
         ws.update_cell(2, month_col_start + 1, f"{month}月")
 
@@ -306,10 +298,35 @@ class SheetsClient:
         header_cells = []
         for j, h in enumerate(col_headers):
             header_cells.append(gspread.Cell(3, month_col_start + 1 + j, h))
-        # A〜Cヘッダー
-        header_cells.append(gspread.Cell(3, 1, "社員番号"))
-        header_cells.append(gspread.Cell(3, 2, "名前"))
-        header_cells.append(gspread.Cell(3, 3, "部署"))
+
+        # 既存のB列を読み取って行構造を確認
+        existing_b_col = ws.col_values(2)
+
+        # A〜C列の行構造を再構築するか判定（1月 or 既存データなし）
+        rebuild_structure = month == 1 or len(existing_b_col) <= self.ROI_DATA_START_ROW
+
+        if rebuild_structure:
+            # A〜C列 + 全データ列をクリアして再構築
+            max_row = max(len(existing_b_col), 300)
+            last_col_idx = self.ROI_DATA_START_COL + 12 * self.ROI_COLS_PER_MONTH - 1
+            last_col_letter = gspread.utils.rowcol_to_a1(1, last_col_idx + 1)[:-1]  # "BU1" → "BU"
+            ws.batch_clear([f"A4:{last_col_letter}{max_row}"])
+            ws.format(f"A4:{last_col_letter}{max_row}", {
+                "backgroundColor": {"red": 1, "green": 1, "blue": 1},
+                "textFormat": {"bold": False, "foregroundColor": {"red": 0, "green": 0, "blue": 0}, "fontSize": 9},
+            })
+
+            # A〜Cヘッダー
+            header_cells.append(gspread.Cell(3, 1, "社員番号"))
+            header_cells.append(gspread.Cell(3, 2, "名前"))
+            header_cells.append(gspread.Cell(3, 3, "部署"))
+        else:
+            # データ列のみクリア（A〜C列は維持）
+            start_letter = gspread.utils.rowcol_to_a1(1, month_col_start + 1)[:-1]
+            end_letter = gspread.utils.rowcol_to_a1(1, month_col_start + self.ROI_COLS_PER_MONTH)[:-1]
+            max_row = max(len(existing_b_col), 300)
+            ws.batch_clear([f"{start_letter}4:{end_letter}{max_row}"])
+
         ws.update_cells(header_cells)
 
         # --- 2階層データ書き込み ---
@@ -317,121 +334,182 @@ class SheetsClient:
         row_idx = self.ROI_DATA_START_ROW  # 4行目開始
         segment_header_rows = []  # 書式設定用
 
-        for seg in seg_order:
-            members = segments[seg]
-            members.sort(key=lambda r: sum(self._calc_row_values(r)), reverse=True)
+        if rebuild_structure:
+            # A〜C列も書き込み
+            for seg in seg_order:
+                members = segments[seg]
+                members.sort(key=lambda r: sum(self._calc_row_values(r)), reverse=True)
 
-            # セグメント小計行
-            seg_totals = [0] * 6
-            for r in members:
-                vals = self._calc_row_values(r)
-                for j in range(6):
-                    seg_totals[j] += vals[j]
+                seg_totals = [0] * 6
+                for r in members:
+                    vals = self._calc_row_values(r)
+                    for j in range(6):
+                        seg_totals[j] += vals[j]
 
-            display_name = self.SEGMENT_DISPLAY_NAMES.get(seg, seg)
-            cells.append(gspread.Cell(row_idx, 1, ""))
-            cells.append(gspread.Cell(row_idx, 2, f"▼ {display_name}（{len(members)}名）"))
-            cells.append(gspread.Cell(row_idx, 3, ""))
-            for j, v in enumerate(seg_totals):
-                cells.append(gspread.Cell(row_idx, month_col_start + 1 + j, v if v else ""))
-            segment_header_rows.append(row_idx)
-            row_idx += 1
-
-            # メンバー明細行
-            for r in members:
-                vals = self._calc_row_values(r)
-                if sum(vals) == 0:
-                    continue
-                cells.append(gspread.Cell(row_idx, 1, r.get("emp_no", "")))
-                cells.append(gspread.Cell(row_idx, 2, f"  {r.get('name', '')}"))
-                cells.append(gspread.Cell(row_idx, 3, r.get("department", "")))
-                for j, v in enumerate(vals):
+                display_name = self.SEGMENT_DISPLAY_NAMES.get(seg, seg)
+                cells.append(gspread.Cell(row_idx, 1, ""))
+                cells.append(gspread.Cell(row_idx, 2, f"▼ {display_name}（{len(members)}名）"))
+                cells.append(gspread.Cell(row_idx, 3, ""))
+                for j, v in enumerate(seg_totals):
                     cells.append(gspread.Cell(row_idx, month_col_start + 1 + j, v if v else ""))
+                segment_header_rows.append(row_idx)
                 row_idx += 1
+
+                for r in members:
+                    vals = self._calc_row_values(r)
+                    if sum(vals) == 0:
+                        continue
+                    cells.append(gspread.Cell(row_idx, 1, r.get("emp_no", "")))
+                    cells.append(gspread.Cell(row_idx, 2, f"  {r.get('name', '')}"))
+                    cells.append(gspread.Cell(row_idx, 3, r.get("department", "")))
+                    for j, v in enumerate(vals):
+                        cells.append(gspread.Cell(row_idx, month_col_start + 1 + j, v if v else ""))
+                    row_idx += 1
+        else:
+            # B列の既存行にマッチしてデータ列のみ書き込み
+            # B列から名前→行番号のマッピングを構築
+            name_to_row: dict[str, int] = {}
+            seg_rows: list[int] = []
+            for i, val in enumerate(existing_b_col):
+                row_num = i + 1  # 1-based
+                if row_num < self.ROI_DATA_START_ROW:
+                    continue
+                stripped = val.strip()
+                if stripped.startswith("▼"):
+                    seg_rows.append(row_num)
+                elif stripped:
+                    # メンバー行: "  山田 太郎" → "山田 太郎"
+                    name_to_row[normalize_name(stripped)] = row_num
+
+            # セグメント小計を更新
+            seg_row_map: dict[str, int] = {}
+            for i, val in enumerate(existing_b_col):
+                row_num = i + 1
+                stripped = val.strip()
+                if stripped.startswith("▼"):
+                    # "▼ SDR（15名）" → "SDR"
+                    seg_key = stripped.split("（")[0].replace("▼", "").strip()
+                    # display_name → seg_key の逆引き
+                    for k, v in self.SEGMENT_DISPLAY_NAMES.items():
+                        if v == seg_key:
+                            seg_key = k
+                            break
+                    seg_row_map[seg_key] = row_num
+
+            for seg in seg_order:
+                members = segments[seg]
+                if seg in seg_row_map:
+                    seg_totals = [0] * 6
+                    for r in members:
+                        vals = self._calc_row_values(r)
+                        for j in range(6):
+                            seg_totals[j] += vals[j]
+                    for j, v in enumerate(seg_totals):
+                        cells.append(gspread.Cell(seg_row_map[seg], month_col_start + 1 + j, v if v else ""))
+                    segment_header_rows.append(seg_row_map[seg])
+
+                for r in members:
+                    vals = self._calc_row_values(r)
+                    if sum(vals) == 0:
+                        continue
+                    name = normalize_name(r.get("name", ""))
+                    matched_row = name_to_row.get(name)
+                    if matched_row:
+                        for j, v in enumerate(vals):
+                            cells.append(gspread.Cell(matched_row, month_col_start + 1 + j, v if v else ""))
+                    # マッチしない場合はスキップ（1月で行が作られていない人）
 
         if cells:
             ws.update_cells(cells)
 
-        # 書式設定
-        self._format_roi_tab_hierarchical(ws, month_col_start, row_idx - 1, segment_header_rows)
+        # 書式設定（rebuild時のみ条件付き書式を設定）
+        if rebuild_structure:
+            self._setup_conditional_formatting(ws)
 
         print(f"[Sheets] ROIタブ書き込み完了: {len(rows)}名 {len(seg_order)}セグメント → {month}月列")
 
-    def _format_roi_tab_hierarchical(
-        self, ws, month_col_start: int, last_data_row: int, segment_rows: list[int]
-    ) -> None:
-        """ROIタブの2階層構造用書式設定"""
-        from gspread_formatting import (
-            CellFormat, Color, TextFormat, NumberFormat,
-            format_cell_range, set_frozen, Borders, Border,
-        )
+    def _setup_conditional_formatting(self, ws) -> None:
+        """条件付き書式を設定（行が変わっても自動適用）
 
-        header_bg = Color(0.22, 0.46, 0.85)
-        header_text = Color(1, 1, 1)
-        month_bg = Color(0.87, 0.92, 0.98)
-        seg_bg = Color(0.93, 0.95, 0.98)       # セグメント小計行
-        name_bg = Color(0.98, 0.98, 0.98)
-        border_color = Color(0.82, 0.85, 0.89)
+        - B列が「▼」で始まる行 → 太字 + 薄青背景（セグメント小計）
+        - B列が空でなく「▼」で始まらない行 → 薄灰背景（メンバー行）
+        """
+        from gspread_formatting import set_frozen
 
-        thin_border = Border("SOLID", color=border_color)
-        all_borders = Borders(top=thin_border, bottom=thin_border, left=thin_border, right=thin_border)
+        sheet_id = ws.id
 
-        def col_letter(col_0based):
-            c = col_0based
-            if c < 26:
-                return chr(65 + c)
-            return chr(64 + c // 26) + chr(65 + c % 26)
+        # 既存の条件付き書式をクリア
+        existing = ws.spreadsheet.fetch_sheet_metadata()
+        cond_rules = []
+        for sheet in existing.get("sheets", []):
+            if sheet["properties"]["sheetId"] == sheet_id:
+                cond_rules = sheet.get("conditionalFormats", [])
+                break
 
-        start_col = col_letter(month_col_start)
-        end_col = col_letter(month_col_start + self.ROI_COLS_PER_MONTH - 1)
+        requests = []
+        # 既存ルールを全削除（逆順で）
+        for i in range(len(cond_rules) - 1, -1, -1):
+            requests.append({
+                "deleteConditionalFormatRule": {
+                    "sheetId": sheet_id,
+                    "index": i,
+                }
+            })
 
-        # Row 2: 月ヘッダー（青）
-        format_cell_range(ws, f"{start_col}2:{end_col}2", CellFormat(
-            backgroundColor=header_bg,
-            textFormat=TextFormat(bold=True, foregroundColor=header_text, fontSize=10),
-            horizontalAlignment="CENTER",
-            borders=all_borders,
-        ))
+        # ルール1: B列が「▼」で始まる → セグメント小計（薄青 + 太字）
+        requests.append({
+            "addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [{
+                        "sheetId": sheet_id,
+                        "startRowIndex": 3,  # 4行目以降（0-based）
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 80,  # 十分広く
+                    }],
+                    "booleanRule": {
+                        "condition": {
+                            "type": "CUSTOM_FORMULA",
+                            "values": [{"userEnteredValue": '=LEFT($B4,1)="▼"'}],
+                        },
+                        "format": {
+                            "backgroundColor": {"red": 0.85, "green": 0.92, "blue": 0.98},
+                            "textFormat": {"bold": True},
+                        },
+                    },
+                },
+                "index": 0,
+            }
+        })
 
-        # Row 3: カラムヘッダー（薄青）
-        format_cell_range(ws, f"A3:C3", CellFormat(
-            backgroundColor=month_bg, textFormat=TextFormat(bold=True, fontSize=9), borders=all_borders,
-        ))
-        format_cell_range(ws, f"{start_col}3:{end_col}3", CellFormat(
-            backgroundColor=month_bg, textFormat=TextFormat(bold=True, fontSize=9),
-            horizontalAlignment="CENTER", borders=all_borders,
-        ))
+        # ルール2: B列が空でなく「▼」でない → メンバー行（薄灰）
+        requests.append({
+            "addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [{
+                        "sheetId": sheet_id,
+                        "startRowIndex": 3,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 80,
+                    }],
+                    "booleanRule": {
+                        "condition": {
+                            "type": "CUSTOM_FORMULA",
+                            "values": [{"userEnteredValue": '=AND($B4<>"",LEFT($B4,1)<>"▼")'}],
+                        },
+                        "format": {
+                            "backgroundColor": {"red": 0.97, "green": 0.97, "blue": 0.97},
+                        },
+                    },
+                },
+                "index": 1,
+            }
+        })
 
-        if last_data_row < self.ROI_DATA_START_ROW:
-            return
-
-        # 全データ範囲: 数値フォーマット + ボーダー
-        format_cell_range(ws, f"{start_col}{self.ROI_DATA_START_ROW}:{end_col}{last_data_row}", CellFormat(
-            numberFormat=NumberFormat(type="NUMBER", pattern="#,##0"),
-            horizontalAlignment="RIGHT",
-            borders=all_borders,
-        ))
-        format_cell_range(ws, f"A{self.ROI_DATA_START_ROW}:C{last_data_row}", CellFormat(
-            borders=all_borders,
-        ))
-
-        # セグメント小計行 + メンバー行をバッチで書式設定
-        from gspread_formatting import batch_updater
-        with batch_updater(ws.spreadsheet) as batch:
-            for sr in segment_rows:
-                batch.format_cell_range(ws, f"A{sr}:{end_col}{sr}", CellFormat(
-                    backgroundColor=seg_bg,
-                    textFormat=TextFormat(bold=True),
-                    borders=all_borders,
-                ))
-            for r in range(self.ROI_DATA_START_ROW, last_data_row + 1):
-                if r not in segment_rows:
-                    batch.format_cell_range(ws, f"A{r}:C{r}", CellFormat(
-                        backgroundColor=name_bg,
-                        textFormat=TextFormat(fontSize=9),
-                    ))
+        if requests:
+            ws.spreadsheet.batch_update({"requests": requests})
 
         set_frozen(ws, rows=3, cols=3)
+        print("[Sheets] 条件付き書式設定完了")
 
 
     def read_expense_summary(self, year: int, month: int) -> list[dict]:

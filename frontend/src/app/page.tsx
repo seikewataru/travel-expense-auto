@@ -6,17 +6,27 @@ import JournalTab from "@/components/JournalTab";
 import ROITab from "@/components/ROITab";
 import DeptROITab from "@/components/DeptROITab";
 
-const TABS = [
-  { key: "aggregate", label: "旅費集計" },
-  { key: "journal", label: "仕訳生成" },
-  { key: "roi", label: "ROI分析" },
-  { key: "dept-roi", label: "部門別ROI" },
+const SECTIONS = [
+  {
+    label: "分析",
+    tabs: [
+      { key: "dept-roi", label: "部門別ROI" },
+      { key: "aggregate", label: "個人別交通費" },
+    ],
+  },
+  {
+    label: "集計",
+    tabs: [
+      { key: "roi", label: "科目別" },
+      { key: "journal", label: "仕訳生成" },
+    ],
+  },
 ] as const;
 
-type TabKey = (typeof TABS)[number]["key"];
+type TabKey = (typeof SECTIONS)[number]["tabs"][number]["key"];
 
 export default function Home() {
-  const [tab, setTab] = useState<TabKey>("aggregate");
+  const [tab, setTab] = useState<TabKey>("dept-roi");
 
   return (
     <div className="flex min-h-screen">
@@ -28,19 +38,28 @@ export default function Home() {
           </h1>
           <p className="text-xs text-[var(--muted)] mt-0.5">Travel Expense Auto</p>
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`w-full text-left rounded-lg px-3 py-2 text-[13px] font-medium transition ${
-                tab === t.key
-                  ? "bg-[var(--primary-light)] text-[var(--primary)]"
-                  : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-slate-50"
-              }`}
-            >
-              {t.label}
-            </button>
+        <nav className="flex-1 px-3 py-4">
+          {SECTIONS.map((section) => (
+            <div key={section.label} className="mb-4">
+              <p className="px-3 mb-1.5 text-[10px] font-semibold tracking-wider uppercase text-[var(--muted-light)]">
+                {section.label}
+              </p>
+              <div className="space-y-0.5">
+                {section.tabs.map((t) => (
+                  <button
+                    key={t.key}
+                    onClick={() => setTab(t.key)}
+                    className={`w-full text-left rounded-lg px-3 py-2 text-[13px] font-medium transition ${
+                      tab === t.key
+                        ? "bg-[var(--primary-light)] text-[var(--primary)]"
+                        : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-slate-50"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
         <div className="px-5 py-4 border-t border-[var(--border)]">

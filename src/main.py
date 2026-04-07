@@ -321,7 +321,8 @@ def cmd_aggregate(args: argparse.Namespace) -> None:
         print(json.dumps(summary, indent=2, ensure_ascii=False))
     else:
         print("\n--- スプレッドシート出力 ---")
-        sheets.write_expense_summary(summary, year, month)
+        segment_map = sheets.read_segment_map(year, month)
+        sheets.write_expense_summary(summary, year, month, segment_map=segment_map)
         print("完了!")
 
 
