@@ -238,11 +238,13 @@ class ExpenseAggregator:
             self._add(name, "hotel", amount, "Racco")
 
     def add_jalan(self, records: list[dict]) -> None:
-        """じゃらんデータ → 宿泊カテゴリ
+        """じゃらんデータ → 宿泊カテゴリ（TUNAG稟議突合で振替判定）
 
-        CSV fields: 宿泊代表者名（姓・漢字）, 宿泊代表者名（名・漢字）, 精算料金
+        CSV fields: 宿泊代表者名（姓・漢字）, 宿泊代表者名（名・漢字）, 精算料金,
+                    法人専用項目②TUNAG出張申請番号
         ※キャンセル済みは除外
         """
+        transferred = 0
         for r in records:
             status = r.get("予約ステータス", "")
             if "キャンセル" in status:
@@ -253,7 +255,22 @@ class ExpenseAggregator:
             amount = tax_exclusive(parse_amount(r.get("精算料金", "0")))
             if amount == 0:
                 continue
-            self._add(name, "hotel", amount, "じゃらん")
+
+            category = "hotel"
+
+            # TUNAG稟議突合による振替（じゃらんCSVの法人専用項目②）
+            tunag_id = r.get("法人専用項目②TUNAG出張申請番号", "").strip()
+            if tunag_id and tunag_id in self._ringi_lookup:
+                ringi_cat = self._ringi_lookup[tunag_id]
+                transfer_map = self.RINGI_TRANSFER_MAP.get(ringi_cat, {})
+                if category in transfer_map:
+                    category = transfer_map[category]
+                    transferred += 1
+
+            self._add(name, category, amount, "じゃらん")
+
+        if transferred:
+            print(f"  じゃらん 稟議振替: {transferred}件")
 
     def add_times_car(self, records: list[dict]) -> None:
         """タイムズカーデータ → その他カテゴリ

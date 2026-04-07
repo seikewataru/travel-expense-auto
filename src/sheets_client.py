@@ -725,34 +725,62 @@ class SheetsClient:
     RINGI_CATEGORY_MAP: dict[str, str] = {
         "広告費": "ad",
         "採用費": "recruit",
-        "広告費採用費": "ad",  # 両方含む場合は広告費寄せ（要確認）
+        "広告費採用費": "ad",  # 両方含む場合は広告費寄せ
     }
+
+    # I列タイトル/J列内容からの振替判定キーワード
+    RINGI_KEYWORD_RULES: list[tuple[list[str], str]] = [
+        (["EXPO", "展示会", "出展"], "ad"),       # 広告宣伝費
+        (["採用イベント", "採用説明会"], "recruit"),  # 採用費
+    ]
 
     def read_ringi_lookup(self) -> dict[str, str]:
         """稟議一覧シートから 利用ID → 振替分類 のルックアップを生成
 
+        判定優先順位:
+        1. V列（広告費・採用費・その他）に値がある → そのまま使う
+        2. V列が空 → I列（タイトル）+ J列（内容）のキーワードで判定
+
         Returns:
             {"35990549": "ad", "34761210": "recruit", ...}
-            V列が「その他」or 空 → ルックアップに含めない（旅費交通費のまま）
         """
         sh = self._gc.open_by_key(RINGI_SHEET_ID)
         ws = sh.get_worksheet_by_id(RINGI_SHEET_GID)
 
-        # B列(利用ID)=col2, V列(広告費・採用費・その他)=col22
+        # B列(利用ID), I列(タイトル), J列(内容), V列(広告費・採用費・その他)
         # ヘッダーは8行目、データは9行目以降
+        # B=col0, I=col7, J=col8, V=col20 (B9:Vの範囲内)
         data = ws.get_values("B9:V")
 
         result = {}
+        keyword_matched = 0
         for row in data:
             rid = row[0].strip() if len(row) > 0 and row[0] else ""
-            v_col = row[20].strip() if len(row) > 20 and row[20] else ""
-            if not rid or not v_col:
+            if not rid:
                 continue
-            category = self.RINGI_CATEGORY_MAP.get(v_col)
-            if category:
-                result[rid] = category
 
-        print(f"[Sheets] 稟議ルックアップ読み込み完了: {len(result)}件（広告費/採用費のみ）")
+            v_col = row[20].strip() if len(row) > 20 and row[20] else ""
+
+            # 1. V列で判定
+            if v_col:
+                category = self.RINGI_CATEGORY_MAP.get(v_col)
+                if category:
+                    result[rid] = category
+                continue
+
+            # 2. V列が空 → I列(タイトル) + J列(内容) のキーワード判定
+            title = row[7].strip() if len(row) > 7 else ""
+            content = row[8].strip() if len(row) > 8 else ""
+            text = f"{title} {content}"
+
+            for keywords, cat in self.RINGI_KEYWORD_RULES:
+                if any(kw in text for kw in keywords):
+                    result[rid] = cat
+                    keyword_matched += 1
+                    break
+
+        v_count = len(result) - keyword_matched
+        print(f"[Sheets] 稟議ルックアップ読み込み完了: {len(result)}件（V列={v_count}, キーワード={keyword_matched}）")
         return result
 
     def write_segment_roi(
