@@ -78,6 +78,7 @@ export type DeptROIRow = {
   sales: number;
   roi: number;
   members?: DeptROIMember[];
+  salesDef?: string;
 };
 
 export type DeptROIResponse = {

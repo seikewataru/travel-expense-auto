@@ -118,7 +118,7 @@ function useQuarterlyData(year: number, quarter: number) {
   const months = QUARTERS.find((q) => q.key === quarter)?.months ?? [1, 2, 3];
   const m1 = months[0], m2 = months[1], m3 = months[2];
 
-  const sk = (m: number) => `dept-roi-v7-${year}-${String(m).padStart(2, "0")}`;
+  const sk = (m: number) => `dept-roi-v8-${year}-${String(m).padStart(2, "0")}`;
   const su = (m: number) => `/dept-roi-result-${year}-${String(m).padStart(2, "0")}.json`;
 
   const { result: r1 } = usePersistedResult<DeptROIResponse>(sk(m1), su(m1));
@@ -136,7 +136,7 @@ export default function DeptROITab() {
   const [quarter, setQuarter] = useState(1);
 
   // 月別データ
-  const storageKey = `dept-roi-v7-${year}-${String(month).padStart(2, "0")}`;
+  const storageKey = `dept-roi-v8-${year}-${String(month).padStart(2, "0")}`;
   const seedUrl = `/dept-roi-result-${year}-${String(month).padStart(2, "0")}.json`;
   const { result: monthlyResult, fetchedAt } = usePersistedResult<DeptROIResponse>(storageKey, seedUrl);
 
@@ -144,7 +144,7 @@ export default function DeptROITab() {
   const quarterlyResult = useQuarterlyData(year, quarter);
 
   // トレンドチャート用: 1〜3月を個別ロード
-  const sk = (m: number) => `dept-roi-v7-${year}-${String(m).padStart(2, "0")}`;
+  const sk = (m: number) => `dept-roi-v8-${year}-${String(m).padStart(2, "0")}`;
   const su = (m: number) => `/dept-roi-result-${year}-${String(m).padStart(2, "0")}.json`;
   const { result: trend1 } = usePersistedResult<DeptROIResponse>(sk(1), su(1));
   const { result: trend2 } = usePersistedResult<DeptROIResponse>(sk(2), su(2));
@@ -306,7 +306,17 @@ export default function DeptROITab() {
                           <td className="px-5 py-2.5 text-right font-semibold tabular-nums">
                             <span className={d.roi >= 50 ? "text-[var(--success)]" : d.roi >= 10 ? "text-[var(--primary)]" : "text-[var(--muted)]"}>{d.roi}x</span>
                           </td>
-                          <td className="px-5 py-2.5 text-right tabular-nums">{yen(d.sales)}</td>
+                          <td className="px-5 py-2.5 text-right tabular-nums whitespace-nowrap">
+                            {yen(d.sales)}
+                            {d.salesDef && (
+                              <span className="ml-1 relative group cursor-help">
+                                <span className="text-[var(--muted)] text-[11px]">ℹ</span>
+                                <span className="absolute bottom-full right-0 mb-1 hidden group-hover:block bg-[var(--foreground)] text-[var(--background)] text-[11px] px-2 py-1 rounded whitespace-nowrap z-10">
+                                  {d.salesDef}
+                                </span>
+                              </span>
+                            )}
+                          </td>
                           <td className="px-5 py-2.5 text-right font-semibold tabular-nums">{yen(d.total)}</td>
                           <td className="px-5 py-2.5 text-right tabular-nums">{d.shinkansen ? yen(d.shinkansen) : "—"}</td>
                           <td className="px-5 py-2.5 text-right tabular-nums">{d.train ? yen(d.train) : "—"}</td>
