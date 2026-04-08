@@ -259,7 +259,7 @@ export default function DeptROITab() {
                         {col.key === "roi" && (
                           <span className="ml-1 relative group/roi cursor-help">
                             <span className="text-[var(--muted)] text-[11px]">ℹ</span>
-                            <span className="absolute bottom-full right-0 mb-1 hidden group-hover/roi:block bg-[var(--foreground)] text-[var(--background)] text-[11px] px-2.5 py-1.5 rounded whitespace-nowrap z-10 normal-case tracking-normal font-normal">
+                            <span className="absolute top-full right-0 mt-1 hidden group-hover/roi:block bg-[var(--foreground)] text-[var(--background)] text-[11px] px-2.5 py-1.5 rounded whitespace-nowrap z-10 normal-case tracking-normal font-normal">
                               青: 全体平均以上 / オレンジ: 10x未満
                             </span>
                           </span>
