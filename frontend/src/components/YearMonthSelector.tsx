@@ -1,8 +1,10 @@
 "use client";
 
-const now = new Date();
-const YEARS = [now.getFullYear() - 1, now.getFullYear()];
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+
+/** データが存在する最新月（これ以降は選択不可） */
+const DATA_MAX_YEAR = 2026;
+const DATA_MAX_MONTH = 3;
 
 interface Props {
   year: number;
@@ -13,20 +15,25 @@ interface Props {
 
 function Pill({
   active,
+  disabled,
   onClick,
   children,
 }: {
   active: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-        active
-          ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm"
-          : "text-[var(--muted)] hover:text-[var(--foreground)]"
+        disabled
+          ? "text-[var(--muted)]/30 cursor-not-allowed"
+          : active
+            ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm"
+            : "text-[var(--muted)] hover:text-[var(--foreground)]"
       }`}
     >
       {children}
@@ -46,22 +53,23 @@ export default function YearMonthSelector({
         年
       </span>
       <div className="flex gap-0.5 rounded-lg bg-[var(--background)] p-0.5">
-        {YEARS.map((y) => (
-          <Pill key={y} active={year === y} onClick={() => onYearChange(y)}>
-            {y}
-          </Pill>
-        ))}
+        <Pill active={year === 2026} onClick={() => onYearChange(2026)}>
+          2026
+        </Pill>
       </div>
 
       <span className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider ml-2">
         月
       </span>
       <div className="flex gap-0.5 rounded-lg bg-[var(--background)] p-0.5">
-        {MONTHS.map((m) => (
-          <Pill key={m} active={month === m} onClick={() => onMonthChange(m)}>
-            {m}
-          </Pill>
-        ))}
+        {MONTHS.map((m) => {
+          const disabled = year > DATA_MAX_YEAR || (year === DATA_MAX_YEAR && m > DATA_MAX_MONTH);
+          return (
+            <Pill key={m} active={month === m} disabled={disabled} onClick={() => onMonthChange(m)}>
+              {m}
+            </Pill>
+          );
+        })}
       </div>
     </div>
   );

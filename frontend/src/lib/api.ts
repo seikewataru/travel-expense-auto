@@ -54,6 +54,18 @@ export type ROIResponse = {
   overall_roi: number;
 };
 
+export type DeptROIMember = {
+  emp_no: string;
+  name: string;
+  department: string;
+  shinkansen: number;
+  train: number;
+  car: number;
+  airplane: number;
+  hotel: number;
+  total: number;
+};
+
 export type DeptROIRow = {
   department: string;
   headcount: number;
@@ -65,6 +77,7 @@ export type DeptROIRow = {
   total: number;
   sales: number;
   roi: number;
+  members?: DeptROIMember[];
 };
 
 export type DeptROIResponse = {

@@ -47,6 +47,7 @@ export default function DeptROITab() {
 
   const [sortKey, setSortKey] = useState<SortKey>("total");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -55,6 +56,15 @@ export default function DeptROITab() {
       setSortKey(key);
       setSortDir(key === "department" ? "asc" : "desc");
     }
+  };
+
+  const toggleExpand = (dept: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(dept)) next.delete(dept);
+      else next.add(dept);
+      return next;
+    });
   };
 
   const sorted = useMemo(() => {
@@ -116,6 +126,7 @@ export default function DeptROITab() {
               <table className="w-full text-[13px]">
                 <thead>
                   <tr className="border-b border-[var(--border)] text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider">
+                    <th className="w-8" />
                     {COLUMNS.map((col) => (
                       <th
                         key={col.key}
@@ -133,27 +144,61 @@ export default function DeptROITab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map((d, i) => (
-                    <tr
-                      key={i}
-                      className="border-b border-[var(--border)] last:border-0 hover:bg-slate-50/50 transition"
-                    >
-                      <td className="px-5 py-2.5 font-medium">{d.department}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums">{d.headcount}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums">{d.shinkansen ? yen(d.shinkansen) : "—"}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums">{d.train ? yen(d.train) : "—"}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums">{d.car ? yen(d.car) : "—"}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums">{d.airplane ? yen(d.airplane) : "—"}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums">{d.hotel ? yen(d.hotel) : "—"}</td>
-                      <td className="px-5 py-2.5 text-right font-semibold tabular-nums">{yen(d.total)}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums">{yen(d.sales)}</td>
-                      <td className="px-5 py-2.5 text-right font-semibold tabular-nums">
-                        <span className={d.roi >= 50 ? "text-[var(--success)]" : d.roi >= 10 ? "text-[var(--primary)]" : "text-[var(--muted)]"}>
-                          {d.roi}x
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {sorted.map((d, i) => {
+                    const isExpanded = expanded.has(d.department);
+                    const hasMembers = d.members && d.members.length > 0;
+                    return (
+                      <>
+                        <tr
+                          key={i}
+                          className="border-b border-[var(--border)] last:border-0 hover:bg-slate-50/50 transition"
+                        >
+                          <td className="pl-3 py-2.5 text-center">
+                            {hasMembers && (
+                              <button
+                                onClick={() => toggleExpand(d.department)}
+                                className="text-[var(--muted)] hover:text-[var(--foreground)] transition text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100"
+                              >
+                                {isExpanded ? "−" : "+"}
+                              </button>
+                            )}
+                          </td>
+                          <td className="px-5 py-2.5 font-medium">{d.department}</td>
+                          <td className="px-5 py-2.5 text-right tabular-nums">{d.headcount}</td>
+                          <td className="px-5 py-2.5 text-right tabular-nums">{d.shinkansen ? yen(d.shinkansen) : "—"}</td>
+                          <td className="px-5 py-2.5 text-right tabular-nums">{d.train ? yen(d.train) : "—"}</td>
+                          <td className="px-5 py-2.5 text-right tabular-nums">{d.car ? yen(d.car) : "—"}</td>
+                          <td className="px-5 py-2.5 text-right tabular-nums">{d.airplane ? yen(d.airplane) : "—"}</td>
+                          <td className="px-5 py-2.5 text-right tabular-nums">{d.hotel ? yen(d.hotel) : "—"}</td>
+                          <td className="px-5 py-2.5 text-right font-semibold tabular-nums">{yen(d.total)}</td>
+                          <td className="px-5 py-2.5 text-right tabular-nums">{yen(d.sales)}</td>
+                          <td className="px-5 py-2.5 text-right font-semibold tabular-nums">
+                            <span className={d.roi >= 50 ? "text-[var(--success)]" : d.roi >= 10 ? "text-[var(--primary)]" : "text-[var(--muted)]"}>
+                              {d.roi}x
+                            </span>
+                          </td>
+                        </tr>
+                        {isExpanded && d.members?.map((m, j) => (
+                          <tr
+                            key={`${i}-${j}`}
+                            className="border-b border-[var(--border)] bg-slate-50/30"
+                          >
+                            <td />
+                            <td className="px-5 py-1.5 pl-10 text-[12px] text-[var(--muted)]">{m.name}</td>
+                            <td />
+                            <td className="px-5 py-1.5 text-right text-[12px] tabular-nums text-[var(--muted)]">{m.shinkansen ? yen(m.shinkansen) : "—"}</td>
+                            <td className="px-5 py-1.5 text-right text-[12px] tabular-nums text-[var(--muted)]">{m.train ? yen(m.train) : "—"}</td>
+                            <td className="px-5 py-1.5 text-right text-[12px] tabular-nums text-[var(--muted)]">{m.car ? yen(m.car) : "—"}</td>
+                            <td className="px-5 py-1.5 text-right text-[12px] tabular-nums text-[var(--muted)]">{m.airplane ? yen(m.airplane) : "—"}</td>
+                            <td className="px-5 py-1.5 text-right text-[12px] tabular-nums text-[var(--muted)]">{m.hotel ? yen(m.hotel) : "—"}</td>
+                            <td className="px-5 py-1.5 text-right text-[12px] font-medium tabular-nums text-[var(--muted)]">{yen(m.total)}</td>
+                            <td />
+                            <td />
+                          </tr>
+                        ))}
+                      </>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
