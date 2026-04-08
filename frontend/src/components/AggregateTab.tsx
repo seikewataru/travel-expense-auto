@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { type AggregateResponse } from "@/lib/api";
 import { usePersistedResult } from "@/lib/usePersistedResult";
 import YearMonthSelector from "./YearMonthSelector";
@@ -15,6 +15,20 @@ function yen(n: number) {
   return `¥${n.toLocaleString()}`;
 }
 
+type SortKey = "emp_no" | "name" | "department" | "shinkansen" | "hotel" | "train" | "other" | "total";
+type SortDir = "asc" | "desc";
+
+const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
+  { key: "emp_no", label: "社員番号", align: "left" },
+  { key: "name", label: "名前", align: "left" },
+  { key: "department", label: "部署", align: "left" },
+  { key: "shinkansen", label: "新幹線", align: "right" },
+  { key: "hotel", label: "宿泊", align: "right" },
+  { key: "train", label: "在来線", align: "right" },
+  { key: "other", label: "その他", align: "right" },
+  { key: "total", label: "合計", align: "right" },
+];
+
 export default function AggregateTab() {
   const [year, setYear] = useState(defaultYear);
   const [month, setMonth] = useState(defaultMonth);
@@ -22,26 +36,54 @@ export default function AggregateTab() {
   const seedUrl = `/aggregate-result-${year}-${String(month).padStart(2, "0")}.json`;
   const { result, fetchedAt } = usePersistedResult<AggregateResponse>(storageKey, seedUrl);
   const [scope, setScope] = useState<(typeof SCOPES)[number]>("全体");
+  const [sortKey, setSortKey] = useState<SortKey>("total");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "name" || key === "department" || key === "emp_no" ? "asc" : "desc");
+    }
+  };
 
   // PLベース: _ad, _welfare, _recruit, _subsidiary を除外した通常分のみ
-  const plBase = (r: Record<string, unknown>) => ({
-    shinkansen: (r.shinkansen as number) || 0,
-    hotel: (r.hotel as number) || 0,
-    train: (r.train as number) || 0,
-    car: (r.car as number) || 0,
-    airplane: (r.airplane as number) || 0,
-    other: (r.other as number) || 0,
-    total: ((r.shinkansen as number) || 0) + ((r.hotel as number) || 0) + ((r.train as number) || 0) + ((r.car as number) || 0) + ((r.airplane as number) || 0) + ((r.other as number) || 0),
-  });
+  const plBase = (r: Record<string, unknown>) => {
+    const shinkansen = (r.shinkansen as number) || 0;
+    const hotel = (r.hotel as number) || 0;
+    const train = (r.train as number) || 0;
+    const car = (r.car as number) || 0;
+    const airplane = (r.airplane as number) || 0;
+    const other = (r.other as number) || 0;
+    return {
+      shinkansen, hotel, train, other: car + airplane + other,
+      total: shinkansen + hotel + train + car + airplane + other,
+    };
+  };
 
-  const filtered = result?.summary
-    ? (scope === "スタメン単体"
+  const filtered = useMemo(() => {
+    if (!result?.summary) return [];
+    const scoped = scope === "スタメン単体"
       ? result.summary.filter((r) => r.department !== "株式会社スタジアム")
       : scope === "スタジアム単体"
         ? result.summary.filter((r) => r.department === "株式会社スタジアム")
-        : result.summary
-    ).map((r) => ({ ...r, ...plBase(r) })).filter((r) => r.total > 0)
-    : [];
+        : result.summary;
+    return scoped
+      .map((r) => ({ ...r, ...plBase(r) }))
+      .filter((r) => r.total > 0);
+  }, [result, scope]);
+
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (typeof av === "string" && typeof bv === "string") {
+        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      }
+      return sortDir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
+    });
+  }, [filtered, sortKey, sortDir]);
 
   const totals = filtered.reduce(
     (acc, r) => ({
@@ -102,18 +144,6 @@ export default function AggregateTab() {
                   合計 <span className="font-bold text-[var(--foreground)] text-sm ml-1">{yen(totals.total)}</span>
                 </span>
                 <span className="text-[var(--muted)]">
-                  新幹線 <span className="font-semibold text-[var(--foreground)] ml-1">{yen(totals.shinkansen)}</span>
-                </span>
-                <span className="text-[var(--muted)]">
-                  宿泊 <span className="font-semibold text-[var(--foreground)] ml-1">{yen(totals.hotel)}</span>
-                </span>
-                <span className="text-[var(--muted)]">
-                  在来線 <span className="font-semibold text-[var(--foreground)] ml-1">{yen(totals.train)}</span>
-                </span>
-                <span className="text-[var(--muted)]">
-                  その他 <span className="font-semibold text-[var(--foreground)] ml-1">{yen(totals.other)}</span>
-                </span>
-                <span className="text-[var(--muted)]">
                   {filtered.length}名
                 </span>
               </div>
@@ -121,28 +151,36 @@ export default function AggregateTab() {
 
             {/* テーブル */}
             <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <table className="w-full text-[13px] min-w-[900px]">
                 <thead>
                   <tr className="border-b border-[var(--border)] text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider">
-                    <th className="px-5 py-2.5 text-left">社員番号</th>
-                    <th className="px-5 py-2.5 text-left">名前</th>
-                    <th className="px-5 py-2.5 text-left">部署</th>
-                    <th className="px-5 py-2.5 text-right">新幹線</th>
-                    <th className="px-5 py-2.5 text-right">宿泊</th>
-                    <th className="px-5 py-2.5 text-right">在来線</th>
-                    <th className="px-5 py-2.5 text-right">その他</th>
-                    <th className="px-5 py-2.5 text-right">合計</th>
+                    {COLUMNS.map((col) => (
+                      <th
+                        key={col.key}
+                        onClick={() => handleSort(col.key)}
+                        className={`px-5 py-2.5 cursor-pointer select-none hover:text-[var(--foreground)] transition whitespace-nowrap ${
+                          col.align === "left" ? "text-left" : "text-right"
+                        }`}
+                      >
+                        {col.label}
+                        <span className={`ml-0.5 text-[10px] ${sortKey === col.key ? "text-[var(--primary)]" : "opacity-20"}`}>
+                          {sortKey === col.key
+                            ? sortDir === "asc" ? "▲" : "▼"
+                            : "▼"}
+                        </span>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r, i) => (
+                  {sorted.map((r, i) => (
                     <tr
                       key={i}
                       className="border-b border-[var(--border)] last:border-0 hover:bg-slate-50/50 transition"
                     >
                       <td className="px-5 py-2 text-[var(--muted-light)]">{r.emp_no}</td>
-                      <td className="px-5 py-2 font-medium">{r.name}</td>
-                      <td className="px-5 py-2 text-[var(--muted)]">{r.department}</td>
+                      <td className="px-5 py-2 font-medium whitespace-nowrap">{r.name}</td>
+                      <td className="px-5 py-2 text-[var(--muted)] whitespace-nowrap">{r.department}</td>
                       <td className="px-5 py-2 text-right tabular-nums">{r.shinkansen ? yen(r.shinkansen) : "—"}</td>
                       <td className="px-5 py-2 text-right tabular-nums">{r.hotel ? yen(r.hotel) : "—"}</td>
                       <td className="px-5 py-2 text-right tabular-nums">{r.train ? yen(r.train) : "—"}</td>
