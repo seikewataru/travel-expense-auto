@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { apiPost, type DeptROIResponse } from "@/lib/api";
+import { type DeptROIResponse } from "@/lib/api";
 import { usePersistedResult } from "@/lib/usePersistedResult";
 import MetricCard from "./MetricCard";
 import YearMonthSelector from "./YearMonthSelector";
@@ -25,40 +25,9 @@ function yen(n: number) {
 export default function DeptROITab() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(Math.max(1, now.getMonth()));
-  const [loading, setLoading] = useState(false);
-  const [writing, setWriting] = useState(false);
   const storageKey = `dept-roi-result-${year}-${String(month).padStart(2, "0")}`;
   const seedUrl = `/dept-roi-result-${year}-${String(month).padStart(2, "0")}.json`;
-  const { result, fetchedAt, saveResult } = usePersistedResult<DeptROIResponse>(storageKey, seedUrl);
-  const [error, setError] = useState("");
-  const [writeMsg, setWriteMsg] = useState("");
-
-  const run = async () => {
-    setLoading(true);
-    setError("");
-    setWriteMsg("");
-    try {
-      const res = await apiPost<DeptROIResponse>("/api/dept-roi", { year, month });
-      saveResult(res);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "エラー");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const writeSheet = async () => {
-    setWriting(true);
-    setWriteMsg("");
-    try {
-      const res = await apiPost<{ message: string }>("/api/dept-roi/write", { year, month });
-      setWriteMsg(res.message);
-    } catch (e) {
-      setWriteMsg(e instanceof Error ? e.message : "エラー");
-    } finally {
-      setWriting(false);
-    }
-  };
+  const { result, fetchedAt } = usePersistedResult<DeptROIResponse>(storageKey, seedUrl);
 
   const chartData = result?.departments.map((d) => ({
     name: d.department,
@@ -76,27 +45,12 @@ export default function DeptROITab() {
       </div>
 
       {/* 年月選択 */}
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 space-y-4">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 flex items-center justify-between">
         <YearMonthSelector year={year} month={month} onYearChange={setYear} onMonthChange={setMonth} />
-        <div className="flex items-center justify-end gap-3">
-          {fetchedAt && (
-            <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
-          )}
-          <button
-            onClick={run}
-            disabled={loading}
-            className="rounded-lg bg-[var(--primary)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--primary-hover)] disabled:opacity-50 transition"
-          >
-            {loading ? "読み込み中..." : "分析実行"}
-          </button>
-        </div>
+        {fetchedAt && (
+          <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
+        )}
       </div>
-
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
 
       {result && (
         <>
@@ -183,20 +137,6 @@ export default function DeptROITab() {
               </ResponsiveContainer>
             </div>
           )}
-
-          {/* スプシ書き出し */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={writeSheet}
-              disabled={writing}
-              className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-xs font-medium hover:bg-slate-50 disabled:opacity-50 transition"
-            >
-              {writing ? "書き込み中..." : "スプレッドシートに書き出し"}
-            </button>
-            {writeMsg && (
-              <span className="text-xs text-[var(--success)]">{writeMsg}</span>
-            )}
-          </div>
         </>
       )}
     </div>
