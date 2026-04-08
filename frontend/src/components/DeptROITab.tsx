@@ -218,16 +218,20 @@ export default function DeptROITab() {
         )}
       </div>
 
-      {result && (
+      {result && sorted.length > 0 && (() => {
+        const visibleExpense = sorted.reduce((s, d) => s + d.total, 0);
+        const visibleSales = sorted.reduce((s, d) => s + d.sales, 0);
+        const visibleRoi = visibleExpense > 0 ? Math.round((visibleSales / visibleExpense) * 10) / 10 : 0;
+        return (
         <>
           {/* メトリクスカード */}
           <div className="grid grid-cols-3 gap-4">
-            <MetricCard label="旅費合計" value={yen(result.totals.total_expense)} />
-            <MetricCard label="売上合計" value={yen(result.totals.total_sales)} />
+            <MetricCard label="旅費合計" value={yen(visibleExpense)} />
+            <MetricCard label="売上合計" value={yen(visibleSales)} />
             <MetricCard
               label="全体ROI"
-              value={`${result.totals.overall_roi}x`}
-              accent={result.totals.overall_roi >= 50 ? "success" : result.totals.overall_roi >= 10 ? "primary" : "warning"}
+              value={`${visibleRoi}x`}
+              accent={visibleRoi >= 50 ? "success" : visibleRoi >= 10 ? "primary" : "warning"}
             />
           </div>
 
@@ -239,7 +243,7 @@ export default function DeptROITab() {
               </span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <table className="w-full text-[13px] min-w-[1100px]">
                 <thead>
                   <tr className="border-b border-[var(--border)] text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider">
                     <th className="w-6" />
@@ -285,14 +289,14 @@ export default function DeptROITab() {
                       {yen(sorted.reduce((s, d) => s + d.hotel, 0))}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(result.totals.total_expense)}
+                      {yen(visibleExpense)}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(result.totals.total_sales)}
+                      {yen(visibleSales)}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">
-                      <span className={result.totals.overall_roi >= 50 ? "text-[var(--success)]" : result.totals.overall_roi >= 10 ? "text-[var(--primary)]" : ""}>
-                        {result.totals.overall_roi}x
+                      <span className={visibleRoi >= 50 ? "text-[var(--success)]" : visibleRoi >= 10 ? "text-[var(--primary)]" : ""}>
+                        {visibleRoi}x
                       </span>
                     </td>
                   </tr>
@@ -315,7 +319,7 @@ export default function DeptROITab() {
                               </button>
                             )}
                           </td>
-                          <td className="px-5 py-2.5 font-medium">{d.department}</td>
+                          <td className="px-5 py-2.5 font-medium whitespace-nowrap">{d.department}</td>
                           <td className="px-5 py-2.5 text-right tabular-nums">{d.headcount}</td>
                           <td className="px-5 py-2.5 text-right tabular-nums">{d.shinkansen ? yen(d.shinkansen) : "—"}</td>
                           <td className="px-5 py-2.5 text-right tabular-nums">{d.train ? yen(d.train) : "—"}</td>
@@ -336,7 +340,7 @@ export default function DeptROITab() {
                             className="border-b border-[var(--border)] bg-slate-50/30"
                           >
                             <td />
-                            <td className="px-5 py-1.5 pl-10 text-[12px] text-[var(--muted)]">{m.name}</td>
+                            <td className="px-5 py-1.5 pl-10 text-[12px] text-[var(--muted)] whitespace-nowrap">{m.name}</td>
                             <td />
                             <td className="px-5 py-1.5 text-right text-[12px] tabular-nums text-[var(--muted)]">{m.shinkansen ? yen(m.shinkansen) : "—"}</td>
                             <td className="px-5 py-1.5 text-right text-[12px] tabular-nums text-[var(--muted)]">{m.train ? yen(m.train) : "—"}</td>
@@ -410,7 +414,8 @@ export default function DeptROITab() {
             );
           })()}
         </>
-      )}
+        );
+      })()}
     </div>
   );
 }
