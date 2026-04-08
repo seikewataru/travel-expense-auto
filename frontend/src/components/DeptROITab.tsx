@@ -312,7 +312,7 @@ export default function DeptROITab() {
                           <td className="px-5 py-2.5 font-medium whitespace-nowrap">{d.department}</td>
                           <td className="px-5 py-2.5 text-right tabular-nums">{d.headcount}</td>
                           <td className="px-5 py-2.5 text-right font-semibold tabular-nums">
-                            <span className={d.roi >= visibleRoi ? "text-[var(--primary)]" : d.roi < 10 ? "text-amber-500" : ""}>{d.roi}x</span>
+                            <span className={d.sales === 0 ? "" : d.roi >= visibleRoi ? "text-[var(--primary)]" : d.roi < 10 ? "text-amber-500" : ""}>{d.roi}x</span>
                           </td>
                           <td className="px-5 py-2.5 text-right tabular-nums whitespace-nowrap">
                             {yen(d.sales)}
