@@ -1,22 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { apiPost, type AggregateResponse } from "@/lib/api";
+import { type AggregateResponse } from "@/lib/api";
 import { usePersistedResult } from "@/lib/usePersistedResult";
-import MetricCard from "./MetricCard";
 import YearMonthSelector from "./YearMonthSelector";
 
 const now = new Date();
 const defaultYear = now.getFullYear();
 const defaultMonth = Math.max(1, now.getMonth());
-
-const SOURCES = [
-  { key: "use_mf", label: "MF経費" },
-  { key: "use_ex", label: "EXカード" },
-  { key: "use_racco", label: "Racco" },
-  { key: "use_jalan", label: "じゃらん" },
-  { key: "use_times", label: "タイムズカー" },
-] as const;
 
 const SCOPES = ["全体", "スタメン単体", "スタジアム単体"] as const;
 
@@ -27,31 +18,10 @@ function yen(n: number) {
 export default function AggregateTab() {
   const [year, setYear] = useState(defaultYear);
   const [month, setMonth] = useState(defaultMonth);
-  const [sources, setSources] = useState<Record<string, boolean>>({
-    use_mf: true, use_ex: true, use_racco: true, use_jalan: true, use_times: true,
-  });
-  const [dryRun, setDryRun] = useState(true);
-  const [loading, setLoading] = useState(false);
   const storageKey = `aggregate-result-${year}-${String(month).padStart(2, "0")}`;
   const seedUrl = `/aggregate-result-${year}-${String(month).padStart(2, "0")}.json`;
-  const { result, fetchedAt, saveResult } = usePersistedResult<AggregateResponse>(storageKey, seedUrl);
+  const { result, fetchedAt } = usePersistedResult<AggregateResponse>(storageKey, seedUrl);
   const [scope, setScope] = useState<(typeof SCOPES)[number]>("全体");
-  const [error, setError] = useState("");
-
-  const run = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await apiPost<AggregateResponse>("/api/aggregate", {
-        year, month, ...sources, dry_run: dryRun,
-      });
-      saveResult(res);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "不明なエラー");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const filtered = result?.summary
     ? scope === "スタメン単体"
@@ -83,53 +53,12 @@ export default function AggregateTab() {
       </div>
 
       {/* 年月選択 */}
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 space-y-4">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 flex items-center justify-between">
         <YearMonthSelector year={year} month={month} onYearChange={setYear} onMonthChange={setMonth} />
-
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex gap-3">
-            {SOURCES.map((s) => (
-              <label key={s.key} className="flex items-center gap-1.5 text-xs text-[var(--muted)] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={sources[s.key]}
-                  onChange={(e) => setSources((p) => ({ ...p, [s.key]: e.target.checked }))}
-                  className="rounded border-[var(--border)] text-[var(--primary)] focus:ring-[var(--primary)]/20"
-                />
-                {s.label}
-              </label>
-            ))}
-          </div>
-          <label className="flex items-center gap-1.5 text-xs text-[var(--muted)] cursor-pointer">
-            <input
-              type="checkbox"
-              checked={dryRun}
-              onChange={(e) => setDryRun(e.target.checked)}
-              className="rounded border-[var(--border)] text-[var(--primary)] focus:ring-[var(--primary)]/20"
-            />
-            dry-run（シート書き込みなし）
-          </label>
-        </div>
-
-        <div className="flex items-center justify-end gap-3">
-          {fetchedAt && (
-            <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
-          )}
-          <button
-            onClick={run}
-            disabled={loading}
-            className="rounded-lg bg-[var(--primary)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--primary-hover)] disabled:opacity-50 transition"
-          >
-            {loading ? "集計中..." : "集計実行"}
-          </button>
-        </div>
+        {fetchedAt && (
+          <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
+        )}
       </div>
-
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
 
       {/* 結果 */}
       {result && filtered.length > 0 && (
