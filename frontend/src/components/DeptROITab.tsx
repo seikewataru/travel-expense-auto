@@ -41,7 +41,7 @@ const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
 export default function DeptROITab() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(Math.max(1, now.getMonth()));
-  const storageKey = `dept-roi-v2-${year}-${String(month).padStart(2, "0")}`;
+  const storageKey = `dept-roi-v3-${year}-${String(month).padStart(2, "0")}`;
   const seedUrl = `/dept-roi-result-${year}-${String(month).padStart(2, "0")}.json`;
   const { result, fetchedAt } = usePersistedResult<DeptROIResponse>(storageKey, seedUrl);
 
