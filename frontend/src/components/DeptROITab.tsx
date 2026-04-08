@@ -29,14 +29,14 @@ type SortDir = "asc" | "desc";
 const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
   { key: "department", label: "部門", align: "left" },
   { key: "headcount", label: "人数", align: "right" },
+  { key: "roi", label: "ROI", align: "right" },
+  { key: "sales", label: "売上", align: "right" },
+  { key: "total", label: "旅費合計", align: "right" },
   { key: "shinkansen", label: "新幹線", align: "right" },
   { key: "train", label: "在来線", align: "right" },
   { key: "car", label: "車移動", align: "right" },
   { key: "airplane", label: "飛行機", align: "right" },
   { key: "hotel", label: "宿泊費", align: "right" },
-  { key: "total", label: "旅費合計", align: "right" },
-  { key: "sales", label: "売上", align: "right" },
-  { key: "roi", label: "ROI", align: "right" },
 ];
 
 const OTHER_LABEL = "その他（非売上部門）";
@@ -270,35 +270,17 @@ export default function DeptROITab() {
                   <tr className="border-b-2 border-[var(--border)] bg-slate-50/80 font-semibold text-[13px]">
                     <td />
                     <td className="px-4 py-3">合計</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{sorted.reduce((s, d) => s + d.headcount, 0)}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
-                      {sorted.reduce((s, d) => s + d.headcount, 0)}
+                      <span className={visibleRoi >= 50 ? "text-[var(--success)]" : visibleRoi >= 10 ? "text-[var(--primary)]" : ""}>{visibleRoi}x</span>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(sorted.reduce((s, d) => s + d.shinkansen, 0))}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(sorted.reduce((s, d) => s + d.train, 0))}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(sorted.reduce((s, d) => s + d.car, 0))}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(sorted.reduce((s, d) => s + d.airplane, 0))}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(sorted.reduce((s, d) => s + d.hotel, 0))}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(visibleExpense)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(visibleSales)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      <span className={visibleRoi >= 50 ? "text-[var(--success)]" : visibleRoi >= 10 ? "text-[var(--primary)]" : ""}>
-                        {visibleRoi}x
-                      </span>
-                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">{yen(visibleSales)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{yen(visibleExpense)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{yen(sorted.reduce((s, d) => s + d.shinkansen, 0))}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{yen(sorted.reduce((s, d) => s + d.train, 0))}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{yen(sorted.reduce((s, d) => s + d.car, 0))}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{yen(sorted.reduce((s, d) => s + d.airplane, 0))}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{yen(sorted.reduce((s, d) => s + d.hotel, 0))}</td>
                   </tr>
                   {sorted.map((d, i) => {
                     const isExpanded = expanded.has(d.department);
@@ -321,18 +303,16 @@ export default function DeptROITab() {
                           </td>
                           <td className="px-5 py-2.5 font-medium whitespace-nowrap">{d.department}</td>
                           <td className="px-5 py-2.5 text-right tabular-nums">{d.headcount}</td>
+                          <td className="px-5 py-2.5 text-right font-semibold tabular-nums">
+                            <span className={d.roi >= 50 ? "text-[var(--success)]" : d.roi >= 10 ? "text-[var(--primary)]" : "text-[var(--muted)]"}>{d.roi}x</span>
+                          </td>
+                          <td className="px-5 py-2.5 text-right tabular-nums">{yen(d.sales)}</td>
+                          <td className="px-5 py-2.5 text-right font-semibold tabular-nums">{yen(d.total)}</td>
                           <td className="px-5 py-2.5 text-right tabular-nums">{d.shinkansen ? yen(d.shinkansen) : "—"}</td>
                           <td className="px-5 py-2.5 text-right tabular-nums">{d.train ? yen(d.train) : "—"}</td>
                           <td className="px-5 py-2.5 text-right tabular-nums">{d.car ? yen(d.car) : "—"}</td>
                           <td className="px-5 py-2.5 text-right tabular-nums">{d.airplane ? yen(d.airplane) : "—"}</td>
                           <td className="px-5 py-2.5 text-right tabular-nums">{d.hotel ? yen(d.hotel) : "—"}</td>
-                          <td className="px-5 py-2.5 text-right font-semibold tabular-nums">{yen(d.total)}</td>
-                          <td className="px-5 py-2.5 text-right tabular-nums">{yen(d.sales)}</td>
-                          <td className="px-5 py-2.5 text-right font-semibold tabular-nums">
-                            <span className={d.roi >= 50 ? "text-[var(--success)]" : d.roi >= 10 ? "text-[var(--primary)]" : "text-[var(--muted)]"}>
-                              {d.roi}x
-                            </span>
-                          </td>
                         </tr>
                         {isExpanded && d.members?.map((m, j) => (
                           <tr
@@ -342,14 +322,14 @@ export default function DeptROITab() {
                             <td />
                             <td className="px-5 py-1.5 pl-10 text-[12px] text-[var(--muted)] whitespace-nowrap">{m.name}</td>
                             <td />
+                            <td />
+                            <td />
+                            <td className="px-5 py-1.5 text-right text-[12px] font-medium tabular-nums text-[var(--muted)]">{yen(m.total)}</td>
                             <td className="px-5 py-1.5 text-right text-[12px] tabular-nums text-[var(--muted)]">{m.shinkansen ? yen(m.shinkansen) : "—"}</td>
                             <td className="px-5 py-1.5 text-right text-[12px] tabular-nums text-[var(--muted)]">{m.train ? yen(m.train) : "—"}</td>
                             <td className="px-5 py-1.5 text-right text-[12px] tabular-nums text-[var(--muted)]">{m.car ? yen(m.car) : "—"}</td>
                             <td className="px-5 py-1.5 text-right text-[12px] tabular-nums text-[var(--muted)]">{m.airplane ? yen(m.airplane) : "—"}</td>
                             <td className="px-5 py-1.5 text-right text-[12px] tabular-nums text-[var(--muted)]">{m.hotel ? yen(m.hotel) : "—"}</td>
-                            <td className="px-5 py-1.5 text-right text-[12px] font-medium tabular-nums text-[var(--muted)]">{yen(m.total)}</td>
-                            <td />
-                            <td />
                           </tr>
                         ))}
                       </>
