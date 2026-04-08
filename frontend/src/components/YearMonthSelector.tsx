@@ -99,7 +99,7 @@ export default function YearMonthSelector({
         )}
         <div className="flex gap-0.5 rounded-lg bg-[var(--background)] p-0.5">
           {MONTHS.map((m) => {
-            const disabled = mode === "quarterly" || year > DATA_MAX_YEAR || (year === DATA_MAX_YEAR && m > DATA_MAX_MONTH);
+            const disabled = year > DATA_MAX_YEAR || (year === DATA_MAX_YEAR && m > DATA_MAX_MONTH);
             return (
               <Pill key={m} active={mode === "monthly" && month === m} disabled={disabled} onClick={() => {
                 onPeriodModeChange?.("monthly");
@@ -125,8 +125,7 @@ export default function YearMonthSelector({
           </button>
           <div className="flex gap-0.5 rounded-lg bg-[var(--background)] p-0.5">
             {QUARTERS.map((q) => {
-              const maxMonth = q.months[q.months.length - 1];
-              const disabled = mode === "monthly" || (year === DATA_MAX_YEAR && q.months[0] > DATA_MAX_MONTH);
+              const disabled = year === DATA_MAX_YEAR && q.months[0] > DATA_MAX_MONTH;
               return (
                 <Pill key={q.key} active={mode === "quarterly" && quarter === q.key} disabled={disabled} onClick={() => {
                   onPeriodModeChange?.("quarterly");
