@@ -15,7 +15,7 @@ const SECTIONS = [
     ],
   },
   {
-    label: "集計",
+    label: "集計（経理）",
     tabs: [
       { key: "roi", label: "科目別" },
       { key: "journal", label: "仕訳生成" },
