@@ -45,7 +45,7 @@ export default function DeptROITab() {
   const seedUrl = `/dept-roi-result-${year}-${String(month).padStart(2, "0")}.json`;
   const { result, fetchedAt } = usePersistedResult<DeptROIResponse>(storageKey, seedUrl);
 
-  const [sortKey, setSortKey] = useState<SortKey>("total");
+  const [sortKey, setSortKey] = useState<SortKey>("headcount");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
