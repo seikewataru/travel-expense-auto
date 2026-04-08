@@ -36,8 +36,8 @@ export default function AggregateTab() {
   const seedUrl = `/aggregate-result-${year}-${String(month).padStart(2, "0")}.json`;
   const { result, fetchedAt } = usePersistedResult<AggregateResponse>(storageKey, seedUrl);
   const [scope, setScope] = useState<(typeof SCOPES)[number]>("全体");
-  const [sortKey, setSortKey] = useState<SortKey>("total");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortKey, setSortKey] = useState<SortKey>("department");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -76,6 +76,12 @@ export default function AggregateTab() {
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
+      // 部署ソート時は部署名→合計降順の二段ソート
+      if (sortKey === "department") {
+        const cmp = sortDir === "asc" ? a.department.localeCompare(b.department) : b.department.localeCompare(a.department);
+        if (cmp !== 0) return cmp;
+        return b.total - a.total;
+      }
       const av = a[sortKey];
       const bv = b[sortKey];
       if (typeof av === "string" && typeof bv === "string") {
