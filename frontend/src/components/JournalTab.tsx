@@ -57,7 +57,7 @@ export default function JournalTab() {
         <YearMonthSelector year={year} month={month} onYearChange={setYear} onMonthChange={setMonth} />
         <div className="flex items-center justify-end gap-3">
           {fetchedAt && (
-            <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
+            <span className="text-[11px] text-[var(--muted)]">集計日: {fetchedAt}</span>
           )}
           <button
             onClick={generate}

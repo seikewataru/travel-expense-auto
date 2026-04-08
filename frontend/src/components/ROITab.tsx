@@ -92,7 +92,7 @@ export default function ROITab() {
           </label>
           <div className="flex items-center gap-3">
             {fetchedAt && (
-              <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
+              <span className="text-[11px] text-[var(--muted)]">集計日: {fetchedAt}</span>
             )}
             <button
               onClick={run}

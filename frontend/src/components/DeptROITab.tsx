@@ -48,7 +48,7 @@ export default function DeptROITab() {
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 flex items-center justify-between">
         <YearMonthSelector year={year} month={month} onYearChange={setYear} onMonthChange={setMonth} />
         {fetchedAt && (
-          <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
+          <span className="text-[11px] text-[var(--muted)]">集計日: {fetchedAt}</span>
         )}
       </div>
 
