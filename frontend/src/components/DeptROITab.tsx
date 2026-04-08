@@ -67,9 +67,16 @@ export default function DeptROITab() {
     });
   };
 
+  const OTHER_LABEL = "その他（非売上部門）";
+
   const sorted = useMemo(() => {
     if (!result) return [];
     return [...result.departments].sort((a, b) => {
+      // 「その他（非売上部門）」は常に最下部
+      const isOtherA = a.department === OTHER_LABEL || a.department === "その他";
+      const isOtherB = b.department === OTHER_LABEL || b.department === "その他";
+      if (isOtherA) return 1;
+      if (isOtherB) return -1;
       const av = a[sortKey];
       const bv = b[sortKey];
       if (typeof av === "string" && typeof bv === "string") {
