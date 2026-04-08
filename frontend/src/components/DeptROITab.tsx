@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { type DeptROIResponse } from "@/lib/api";
+import { useState, useMemo, useEffect } from "react";
+import { type DeptROIResponse, type DeptROIRow } from "@/lib/api";
 import { usePersistedResult } from "@/lib/usePersistedResult";
 import MetricCard from "./MetricCard";
-import YearMonthSelector from "./YearMonthSelector";
+import YearMonthSelector, { QUARTERS } from "./YearMonthSelector";
 import {
   BarChart,
   Bar,
@@ -22,6 +22,7 @@ function yen(n: number) {
   return `¥${n.toLocaleString()}`;
 }
 
+type PeriodMode = "monthly" | "quarterly";
 type SortKey = "department" | "headcount" | "shinkansen" | "train" | "car" | "airplane" | "hotel" | "total" | "sales" | "roi";
 type SortDir = "asc" | "desc";
 
@@ -38,12 +39,111 @@ const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
   { key: "roi", label: "ROI", align: "right" },
 ];
 
+const OTHER_LABEL = "その他（非売上部門）";
+
+/** 複数月のDeptROIResponseを合算する */
+function mergeResults(results: (DeptROIResponse | null)[]): DeptROIResponse | null {
+  const valid = results.filter((r): r is DeptROIResponse => r !== null);
+  if (valid.length === 0) return null;
+  if (valid.length === 1) return valid[0];
+
+  // 部門別に合算（人数は重複排除のためmax）
+  const deptMap = new Map<string, DeptROIRow>();
+  const memberNamesMap = new Map<string, Set<string>>();
+
+  for (const res of valid) {
+    for (const d of res.departments) {
+      const existing = deptMap.get(d.department);
+      if (existing) {
+        existing.shinkansen += d.shinkansen;
+        existing.train += d.train;
+        existing.car += d.car;
+        existing.airplane += d.airplane;
+        existing.hotel += d.hotel;
+        existing.total += d.total;
+        existing.sales += d.sales;
+        // 人数は各月の最大値（同一人物が毎月いるため）
+        existing.headcount = Math.max(existing.headcount, d.headcount);
+        // メンバーをマージ（名前で重複排除、金額は合算）
+        if (d.members) {
+          const memberMap = new Map<string, typeof d.members[0]>();
+          for (const m of existing.members ?? []) {
+            memberMap.set(m.name, { ...m });
+          }
+          for (const m of d.members) {
+            const ex = memberMap.get(m.name);
+            if (ex) {
+              ex.shinkansen += m.shinkansen;
+              ex.train += m.train;
+              ex.car += m.car;
+              ex.airplane += m.airplane;
+              ex.hotel += m.hotel;
+              ex.total += m.total;
+            } else {
+              memberMap.set(m.name, { ...m });
+            }
+          }
+          existing.members = Array.from(memberMap.values());
+        }
+      } else {
+        deptMap.set(d.department, {
+          ...d,
+          members: d.members?.map((m) => ({ ...m })),
+        });
+      }
+    }
+  }
+
+  const departments = Array.from(deptMap.values());
+  // ROI再計算
+  for (const d of departments) {
+    d.roi = d.total > 0 ? Math.round((d.sales / d.total) * 10) / 10 : 0;
+    d.members?.sort((a, b) => b.total - a.total);
+  }
+
+  const total_expense = departments.reduce((s, d) => s + d.total, 0);
+  const total_sales = departments.reduce((s, d) => s + d.sales, 0);
+
+  return {
+    departments,
+    totals: {
+      total_expense,
+      total_sales,
+      overall_roi: total_expense > 0 ? Math.round((total_sales / total_expense) * 10) / 10 : 0,
+    },
+  };
+}
+
+function useQuarterlyData(year: number, quarter: number) {
+  const months = QUARTERS.find((q) => q.key === quarter)?.months ?? [1, 2, 3];
+  const m1 = months[0], m2 = months[1], m3 = months[2];
+
+  const sk = (m: number) => `dept-roi-v5-${year}-${String(m).padStart(2, "0")}`;
+  const su = (m: number) => `/dept-roi-result-${year}-${String(m).padStart(2, "0")}.json`;
+
+  const { result: r1 } = usePersistedResult<DeptROIResponse>(sk(m1), su(m1));
+  const { result: r2 } = usePersistedResult<DeptROIResponse>(sk(m2), su(m2));
+  const { result: r3 } = usePersistedResult<DeptROIResponse>(sk(m3), su(m3));
+
+  const merged = useMemo(() => mergeResults([r1, r2, r3]), [r1, r2, r3]);
+  return merged;
+}
+
 export default function DeptROITab() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(Math.max(1, now.getMonth()));
+  const [periodMode, setPeriodMode] = useState<PeriodMode>("monthly");
+  const [quarter, setQuarter] = useState(1);
+
+  // 月別データ
   const storageKey = `dept-roi-v5-${year}-${String(month).padStart(2, "0")}`;
   const seedUrl = `/dept-roi-result-${year}-${String(month).padStart(2, "0")}.json`;
-  const { result, fetchedAt } = usePersistedResult<DeptROIResponse>(storageKey, seedUrl);
+  const { result: monthlyResult, fetchedAt } = usePersistedResult<DeptROIResponse>(storageKey, seedUrl);
+
+  // 四半期データ
+  const quarterlyResult = useQuarterlyData(year, quarter);
+
+  const result = periodMode === "quarterly" ? quarterlyResult : monthlyResult;
 
   const [sortKey, setSortKey] = useState<SortKey>("headcount");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -67,12 +167,9 @@ export default function DeptROITab() {
     });
   };
 
-  const OTHER_LABEL = "その他（非売上部門）";
-
   const sorted = useMemo(() => {
     if (!result) return [];
     return [...result.departments].sort((a, b) => {
-      // 「その他（非売上部門）」は常に最下部
       const isOtherA = a.department === OTHER_LABEL || a.department === "その他";
       const isOtherB = b.department === OTHER_LABEL || b.department === "その他";
       if (isOtherA) return 1;
@@ -103,9 +200,18 @@ export default function DeptROITab() {
 
       {/* 年月選択 */}
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 flex items-center justify-between">
-        <YearMonthSelector year={year} month={month} onYearChange={setYear} onMonthChange={setMonth} />
-        {fetchedAt && (
-          <span className="text-[11px] text-[var(--muted)]">集計日: {fetchedAt}</span>
+        <YearMonthSelector
+          year={year}
+          month={month}
+          onYearChange={setYear}
+          onMonthChange={setMonth}
+          periodMode={periodMode}
+          onPeriodModeChange={setPeriodMode}
+          quarter={quarter}
+          onQuarterChange={setQuarter}
+        />
+        {fetchedAt && periodMode === "monthly" && (
+          <span className="text-[11px] text-[var(--muted)] self-start">集計日: {fetchedAt}</span>
         )}
       </div>
 
