@@ -146,6 +146,40 @@ export default function DeptROITab() {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* 合計行 */}
+                  <tr className="border-b-2 border-[var(--border)] bg-slate-50/80 font-semibold text-[13px]">
+                    <td />
+                    <td className="px-4 py-3">合計</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {sorted.reduce((s, d) => s + d.headcount, 0)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {yen(sorted.reduce((s, d) => s + d.shinkansen, 0))}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {yen(sorted.reduce((s, d) => s + d.train, 0))}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {yen(sorted.reduce((s, d) => s + d.car, 0))}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {yen(sorted.reduce((s, d) => s + d.airplane, 0))}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {yen(sorted.reduce((s, d) => s + d.hotel, 0))}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {yen(result.totals.total_expense)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {yen(result.totals.total_sales)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      <span className={result.totals.overall_roi >= 50 ? "text-[var(--success)]" : result.totals.overall_roi >= 10 ? "text-[var(--primary)]" : ""}>
+                        {result.totals.overall_roi}x
+                      </span>
+                    </td>
+                  </tr>
                   {sorted.map((d, i) => {
                     const isExpanded = expanded.has(d.department);
                     const hasMembers = d.members && d.members.length > 0;
@@ -202,41 +236,6 @@ export default function DeptROITab() {
                     );
                   })}
                 </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-[var(--border)] bg-slate-50/80 font-semibold text-[13px]">
-                    <td />
-                    <td className="px-4 py-3">合計</td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {sorted.reduce((s, d) => s + d.headcount, 0)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(sorted.reduce((s, d) => s + d.shinkansen, 0))}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(sorted.reduce((s, d) => s + d.train, 0))}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(sorted.reduce((s, d) => s + d.car, 0))}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(sorted.reduce((s, d) => s + d.airplane, 0))}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(sorted.reduce((s, d) => s + d.hotel, 0))}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(result.totals.total_expense)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {yen(result.totals.total_sales)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      <span className={result.totals.overall_roi >= 50 ? "text-[var(--success)]" : result.totals.overall_roi >= 10 ? "text-[var(--primary)]" : ""}>
-                        {result.totals.overall_roi}x
-                      </span>
-                    </td>
-                  </tr>
-                </tfoot>
               </table>
             </div>
           </div>
