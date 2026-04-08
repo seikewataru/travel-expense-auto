@@ -640,7 +640,7 @@ class SheetsClient:
         "BDR": "BDR本部",
         "ALLI": "アライアンス本部",
         "CCS": "CS本部",
-        "UNI": "UNION事業本部",
+        "UNI": "UNION営業",
         "UCS": "UNION CS部",
         "事業開発": "事業開発",
         "BCC": "ビジネス共創本部",
