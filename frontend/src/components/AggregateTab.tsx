@@ -18,17 +18,29 @@ function yen(n: number) {
 export default function AggregateTab() {
   const [year, setYear] = useState(defaultYear);
   const [month, setMonth] = useState(defaultMonth);
-  const storageKey = `aggregate-v2-${year}-${String(month).padStart(2, "0")}`;
+  const storageKey = `aggregate-v3-${year}-${String(month).padStart(2, "0")}`;
   const seedUrl = `/aggregate-result-${year}-${String(month).padStart(2, "0")}.json`;
   const { result, fetchedAt } = usePersistedResult<AggregateResponse>(storageKey, seedUrl);
   const [scope, setScope] = useState<(typeof SCOPES)[number]>("全体");
 
+  // PLベース: _ad, _welfare, _recruit, _subsidiary を除外した通常分のみ
+  const plBase = (r: Record<string, unknown>) => ({
+    shinkansen: (r.shinkansen as number) || 0,
+    hotel: (r.hotel as number) || 0,
+    train: (r.train as number) || 0,
+    car: (r.car as number) || 0,
+    airplane: (r.airplane as number) || 0,
+    other: (r.other as number) || 0,
+    total: ((r.shinkansen as number) || 0) + ((r.hotel as number) || 0) + ((r.train as number) || 0) + ((r.car as number) || 0) + ((r.airplane as number) || 0) + ((r.other as number) || 0),
+  });
+
   const filtered = result?.summary
-    ? scope === "スタメン単体"
+    ? (scope === "スタメン単体"
       ? result.summary.filter((r) => r.department !== "株式会社スタジアム")
       : scope === "スタジアム単体"
         ? result.summary.filter((r) => r.department === "株式会社スタジアム")
         : result.summary
+    ).map((r) => ({ ...r, ...plBase(r) })).filter((r) => r.total > 0)
     : [];
 
   const totals = filtered.reduce(
