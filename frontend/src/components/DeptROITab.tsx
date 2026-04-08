@@ -231,7 +231,7 @@ export default function DeptROITab() {
             <MetricCard
               label="全体ROI"
               value={`${visibleRoi}x`}
-              accent={visibleRoi >= 50 ? "success" : visibleRoi >= 10 ? "primary" : "warning"}
+              accent="primary"
             />
           </div>
 
@@ -256,6 +256,14 @@ export default function DeptROITab() {
                         }`}
                       >
                         {col.label}
+                        {col.key === "roi" && (
+                          <span className="ml-1 relative group/roi cursor-help">
+                            <span className="text-[var(--muted)] text-[11px]">ℹ</span>
+                            <span className="absolute bottom-full right-0 mb-1 hidden group-hover/roi:block bg-[var(--foreground)] text-[var(--background)] text-[11px] px-2.5 py-1.5 rounded whitespace-nowrap z-10 normal-case tracking-normal font-normal">
+                              青: 全体平均以上 / オレンジ: 10x未満
+                            </span>
+                          </span>
+                        )}
                         <span className={`ml-0.5 text-[10px] ${sortKey === col.key ? "text-[var(--primary)]" : "opacity-20"}`}>
                           {sortKey === col.key
                             ? sortDir === "asc" ? "▲" : "▼"
@@ -272,7 +280,7 @@ export default function DeptROITab() {
                     <td className="px-4 py-3">合計</td>
                     <td className="px-4 py-3 text-right tabular-nums">{sorted.reduce((s, d) => s + d.headcount, 0)}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
-                      <span className={visibleRoi >= 50 ? "text-[var(--success)]" : visibleRoi >= 10 ? "text-[var(--primary)]" : ""}>{visibleRoi}x</span>
+                      <span className="text-[var(--primary)]">{visibleRoi}x</span>
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">{yen(visibleSales)}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{yen(visibleExpense)}</td>
@@ -304,7 +312,7 @@ export default function DeptROITab() {
                           <td className="px-5 py-2.5 font-medium whitespace-nowrap">{d.department}</td>
                           <td className="px-5 py-2.5 text-right tabular-nums">{d.headcount}</td>
                           <td className="px-5 py-2.5 text-right font-semibold tabular-nums">
-                            <span className={d.roi >= 50 ? "text-[var(--success)]" : d.roi >= 10 ? "text-[var(--primary)]" : "text-[var(--muted)]"}>{d.roi}x</span>
+                            <span className={d.roi >= visibleRoi ? "text-[var(--primary)]" : d.roi < 10 ? "text-amber-500" : ""}>{d.roi}x</span>
                           </td>
                           <td className="px-5 py-2.5 text-right tabular-nums whitespace-nowrap">
                             {yen(d.sales)}
