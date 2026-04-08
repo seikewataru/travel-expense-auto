@@ -6,8 +6,8 @@ import { usePersistedResult } from "@/lib/usePersistedResult";
 import MetricCard from "./MetricCard";
 import YearMonthSelector, { QUARTERS } from "./YearMonthSelector";
 import {
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -143,6 +143,13 @@ export default function DeptROITab() {
   // 四半期データ
   const quarterlyResult = useQuarterlyData(year, quarter);
 
+  // トレンドチャート用: 1〜3月を個別ロード
+  const sk = (m: number) => `dept-roi-v5-${year}-${String(m).padStart(2, "0")}`;
+  const su = (m: number) => `/dept-roi-result-${year}-${String(m).padStart(2, "0")}.json`;
+  const { result: trend1 } = usePersistedResult<DeptROIResponse>(sk(1), su(1));
+  const { result: trend2 } = usePersistedResult<DeptROIResponse>(sk(2), su(2));
+  const { result: trend3 } = usePersistedResult<DeptROIResponse>(sk(3), su(3));
+
   const result = periodMode === "quarterly" ? quarterlyResult : monthlyResult;
 
   const [sortKey, setSortKey] = useState<SortKey>("headcount");
@@ -182,12 +189,6 @@ export default function DeptROITab() {
       return sortDir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
     });
   }, [result, sortKey, sortDir]);
-
-  const chartData = result?.departments.map((d) => ({
-    name: d.department,
-    旅費合計: d.total,
-    売上: d.sales,
-  }));
 
   return (
     <div className="space-y-5">
@@ -353,28 +354,90 @@ export default function DeptROITab() {
             </div>
           </div>
 
-          {/* グラフ */}
-          {chartData && chartData.length > 0 && (
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
-              <p className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
-                部門別 旅費合計 vs 売上
-              </p>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={chartData} barGap={4}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 10000).toFixed(0)}万`} />
-                  <Tooltip
-                    formatter={(value) => yen(Number(value))}
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="旅費合計" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="売上" fill="var(--primary)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+          {/* 月別推移グラフ */}
+          {(() => {
+            const trendMonths = [
+              { label: "1月", data: trend1 },
+              { label: "2月", data: trend2 },
+              { label: "3月", data: trend3 },
+            ].filter((m) => m.data);
+
+            if (trendMonths.length < 2) return null;
+
+            // 売上がある部門のみ（その他・スタジアム除外）
+            const deptNames = new Set<string>();
+            for (const m of trendMonths) {
+              for (const d of m.data!.departments) {
+                if (d.department !== OTHER_LABEL && d.department !== "その他" && d.department !== "株式会社スタジアム" && d.department !== "監査等委員" && d.total > 0) {
+                  deptNames.add(d.department);
+                }
+              }
+            }
+
+            const COLORS = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316", "#6366f1", "#14b8a6", "#e11d48", "#84cc16"];
+
+            // 旅費合計の推移データ
+            const expenseData = trendMonths.map((m) => {
+              const row: Record<string, string | number> = { month: m.label };
+              for (const name of deptNames) {
+                const dept = m.data!.departments.find((d) => d.department === name);
+                row[name] = dept?.total ?? 0;
+              }
+              return row;
+            });
+
+            // ROIの推移データ
+            const roiData = trendMonths.map((m) => {
+              const row: Record<string, string | number> = { month: m.label };
+              for (const name of deptNames) {
+                const dept = m.data!.departments.find((d) => d.department === name);
+                row[name] = dept?.roi ?? 0;
+              }
+              return row;
+            });
+
+            const deptList = Array.from(deptNames);
+
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+                  <p className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
+                    月別 旅費合計推移
+                  </p>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={expenseData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 10000).toFixed(0)}万`} />
+                      <Tooltip formatter={(value) => yen(Number(value))} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      {deptList.map((name, i) => (
+                        <Line key={name} type="monotone" dataKey={name} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+                  <p className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
+                    月別 ROI推移
+                  </p>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={roiData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}x`} />
+                      <Tooltip formatter={(value) => `${value}x`} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      {deptList.map((name, i) => (
+                        <Line key={name} type="monotone" dataKey={name} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            );
+          })()}
         </>
       )}
     </div>
