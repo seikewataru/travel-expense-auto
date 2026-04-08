@@ -34,9 +34,8 @@ export default function Home() {
       <aside className="fixed top-0 left-0 h-screen w-[220px] border-r border-[var(--border)] bg-[var(--card)] flex flex-col z-20">
         <div className="px-5 py-5 border-b border-[var(--border)]">
           <h1 className="text-base font-bold text-[var(--foreground)] tracking-tight">
-            旅費自動仕訳
+            旅費ROIチェック
           </h1>
-          <p className="text-xs text-[var(--muted)] mt-0.5">Travel Expense Auto</p>
         </div>
         <nav className="flex-1 px-3 py-4">
           {SECTIONS.map((section) => (
