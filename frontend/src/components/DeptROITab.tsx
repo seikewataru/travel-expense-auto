@@ -376,17 +376,6 @@ export default function DeptROITab() {
 
             const COLORS = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316", "#6366f1", "#14b8a6", "#e11d48", "#84cc16"];
 
-            // 旅費合計の推移データ
-            const expenseData = trendMonths.map((m) => {
-              const row: Record<string, string | number> = { month: m.label };
-              for (const name of deptNames) {
-                const dept = m.data!.departments.find((d) => d.department === name);
-                row[name] = dept?.total ?? 0;
-              }
-              return row;
-            });
-
-            // ROIの推移データ
             const roiData = trendMonths.map((m) => {
               const row: Record<string, string | number> = { month: m.label };
               for (const name of deptNames) {
@@ -399,42 +388,22 @@ export default function DeptROITab() {
             const deptList = Array.from(deptNames);
 
             return (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
-                  <p className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
-                    月別 旅費合計推移
-                  </p>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={expenseData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-                      <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 10000).toFixed(0)}万`} />
-                      <Tooltip formatter={(value) => yen(Number(value))} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} />
-                      {deptList.map((name, i) => (
-                        <Line key={name} type="monotone" dataKey={name} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
-                      ))}
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
-                  <p className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
-                    月別 ROI推移
-                  </p>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={roiData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-                      <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}x`} />
-                      <Tooltip formatter={(value) => `${value}x`} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} />
-                      {deptList.map((name, i) => (
-                        <Line key={name} type="monotone" dataKey={name} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
-                      ))}
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+                <p className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
+                  月別 ROI推移
+                </p>
+                <ResponsiveContainer width="100%" height={360}>
+                  <LineChart data={roiData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12, fill: "var(--muted)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}x`} />
+                    <Tooltip formatter={(value) => `${value}x`} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    {deptList.map((name, i) => (
+                      <Line key={name} type="monotone" dataKey={name} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 4 }} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             );
           })()}
