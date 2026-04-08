@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { apiPost } from "@/lib/api";
 import { usePersistedResult } from "@/lib/usePersistedResult";
+import YearMonthSelector from "./YearMonthSelector";
 
 const now = new Date();
 
@@ -52,28 +53,9 @@ export default function JournalTab() {
         <p className="text-xs text-[var(--muted)] mt-0.5">MF会計Plusインポート用の仕訳CSVを生成します</p>
       </div>
 
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
-        <div className="flex items-end gap-6">
-          <div>
-            <label className="block text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-1.5">年</label>
-            <input
-              type="number"
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="w-24 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)]"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-1.5">月</label>
-            <input
-              type="number"
-              min={1}
-              max={12}
-              value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
-              className="w-20 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)]"
-            />
-          </div>
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 space-y-4">
+        <YearMonthSelector year={year} month={month} onYearChange={setYear} onMonthChange={setMonth} />
+        <div className="flex items-center justify-end gap-3">
           {fetchedAt && (
             <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
           )}

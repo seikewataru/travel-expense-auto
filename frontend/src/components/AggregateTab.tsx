@@ -4,6 +4,7 @@ import { useState } from "react";
 import { apiPost, type AggregateResponse } from "@/lib/api";
 import { usePersistedResult } from "@/lib/usePersistedResult";
 import MetricCard from "./MetricCard";
+import YearMonthSelector from "./YearMonthSelector";
 
 const now = new Date();
 const defaultYear = now.getFullYear();
@@ -81,30 +82,12 @@ export default function AggregateTab() {
         </div>
       </div>
 
-      {/* 設定カード */}
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
-        <div className="flex items-end gap-6 flex-wrap">
-          <div>
-            <label className="block text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-1.5">年</label>
-            <input
-              type="number"
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="w-24 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)]"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-1.5">月</label>
-            <input
-              type="number"
-              min={1}
-              max={12}
-              value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
-              className="w-20 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)]"
-            />
-          </div>
-          <div className="flex gap-3 pb-0.5">
+      {/* 年月選択 */}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 space-y-4">
+        <YearMonthSelector year={year} month={month} onYearChange={setYear} onMonthChange={setMonth} />
+
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex gap-3">
             {SOURCES.map((s) => (
               <label key={s.key} className="flex items-center gap-1.5 text-xs text-[var(--muted)] cursor-pointer">
                 <input
@@ -117,9 +100,6 @@ export default function AggregateTab() {
               </label>
             ))}
           </div>
-        </div>
-
-        <div className="mt-4 flex items-center justify-between">
           <label className="flex items-center gap-1.5 text-xs text-[var(--muted)] cursor-pointer">
             <input
               type="checkbox"
@@ -129,6 +109,9 @@ export default function AggregateTab() {
             />
             dry-run（シート書き込みなし）
           </label>
+        </div>
+
+        <div className="flex items-center justify-end gap-3">
           {fetchedAt && (
             <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
           )}

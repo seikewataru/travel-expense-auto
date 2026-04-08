@@ -4,6 +4,7 @@ import { useState } from "react";
 import { apiPost, type DeptROIResponse } from "@/lib/api";
 import { usePersistedResult } from "@/lib/usePersistedResult";
 import MetricCard from "./MetricCard";
+import YearMonthSelector from "./YearMonthSelector";
 import {
   BarChart,
   Bar,
@@ -74,41 +75,20 @@ export default function DeptROITab() {
         </div>
       </div>
 
-      {/* 設定 */}
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
-        <div className="flex items-end gap-6 flex-wrap">
-          <div>
-            <label className="block text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-1.5">年</label>
-            <input
-              type="number"
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="w-24 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)]"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-1.5">月</label>
-            <input
-              type="number"
-              min={1}
-              max={12}
-              value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
-              className="w-20 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)]"
-            />
-          </div>
-          <div className="ml-auto flex items-center gap-3">
-            {fetchedAt && (
-              <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
-            )}
-            <button
-              onClick={run}
-              disabled={loading}
-              className="rounded-lg bg-[var(--primary)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--primary-hover)] disabled:opacity-50 transition"
-            >
-              {loading ? "読み込み中..." : "分析実行"}
-            </button>
-          </div>
+      {/* 年月選択 */}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 space-y-4">
+        <YearMonthSelector year={year} month={month} onYearChange={setYear} onMonthChange={setMonth} />
+        <div className="flex items-center justify-end gap-3">
+          {fetchedAt && (
+            <span className="text-[11px] text-[var(--muted)]">前回: {fetchedAt}</span>
+          )}
+          <button
+            onClick={run}
+            disabled={loading}
+            className="rounded-lg bg-[var(--primary)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--primary-hover)] disabled:opacity-50 transition"
+          >
+            {loading ? "読み込み中..." : "分析実行"}
+          </button>
         </div>
       </div>
 
