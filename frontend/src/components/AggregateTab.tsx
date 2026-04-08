@@ -18,7 +18,7 @@ function yen(n: number) {
 export default function AggregateTab() {
   const [year, setYear] = useState(defaultYear);
   const [month, setMonth] = useState(defaultMonth);
-  const storageKey = `aggregate-result-${year}-${String(month).padStart(2, "0")}`;
+  const storageKey = `aggregate-v2-${year}-${String(month).padStart(2, "0")}`;
   const seedUrl = `/aggregate-result-${year}-${String(month).padStart(2, "0")}.json`;
   const { result, fetchedAt } = usePersistedResult<AggregateResponse>(storageKey, seedUrl);
   const [scope, setScope] = useState<(typeof SCOPES)[number]>("全体");
