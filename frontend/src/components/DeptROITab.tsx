@@ -118,7 +118,7 @@ function useQuarterlyData(year: number, quarter: number) {
   const months = QUARTERS.find((q) => q.key === quarter)?.months ?? [1, 2, 3];
   const m1 = months[0], m2 = months[1], m3 = months[2];
 
-  const sk = (m: number) => `dept-roi-v6-${year}-${String(m).padStart(2, "0")}`;
+  const sk = (m: number) => `dept-roi-v7-${year}-${String(m).padStart(2, "0")}`;
   const su = (m: number) => `/dept-roi-result-${year}-${String(m).padStart(2, "0")}.json`;
 
   const { result: r1 } = usePersistedResult<DeptROIResponse>(sk(m1), su(m1));
@@ -136,7 +136,7 @@ export default function DeptROITab() {
   const [quarter, setQuarter] = useState(1);
 
   // 月別データ
-  const storageKey = `dept-roi-v6-${year}-${String(month).padStart(2, "0")}`;
+  const storageKey = `dept-roi-v7-${year}-${String(month).padStart(2, "0")}`;
   const seedUrl = `/dept-roi-result-${year}-${String(month).padStart(2, "0")}.json`;
   const { result: monthlyResult, fetchedAt } = usePersistedResult<DeptROIResponse>(storageKey, seedUrl);
 
@@ -144,7 +144,7 @@ export default function DeptROITab() {
   const quarterlyResult = useQuarterlyData(year, quarter);
 
   // トレンドチャート用: 1〜3月を個別ロード
-  const sk = (m: number) => `dept-roi-v6-${year}-${String(m).padStart(2, "0")}`;
+  const sk = (m: number) => `dept-roi-v7-${year}-${String(m).padStart(2, "0")}`;
   const su = (m: number) => `/dept-roi-result-${year}-${String(m).padStart(2, "0")}.json`;
   const { result: trend1 } = usePersistedResult<DeptROIResponse>(sk(1), su(1));
   const { result: trend2 } = usePersistedResult<DeptROIResponse>(sk(2), su(2));
