@@ -126,17 +126,17 @@ export default function DeptROITab() {
               <table className="w-full text-[13px]">
                 <thead>
                   <tr className="border-b border-[var(--border)] text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider">
-                    <th className="w-8" />
+                    <th className="w-6" />
                     {COLUMNS.map((col) => (
                       <th
                         key={col.key}
                         onClick={() => handleSort(col.key)}
-                        className={`px-5 py-2.5 cursor-pointer select-none hover:text-[var(--foreground)] transition ${
+                        className={`px-4 py-2.5 cursor-pointer select-none hover:text-[var(--foreground)] transition whitespace-nowrap ${
                           col.align === "left" ? "text-left" : "text-right"
                         }`}
                       >
                         {col.label}
-                        <span className={`ml-1 ${sortKey === col.key ? "" : "opacity-25"}`}>
+                        <span className={`ml-0.5 text-[10px] ${sortKey === col.key ? "text-[var(--primary)]" : "opacity-20"}`}>
                           {sortKey === col.key
                             ? sortDir === "asc" ? "▲" : "▼"
                             : "▼"}
