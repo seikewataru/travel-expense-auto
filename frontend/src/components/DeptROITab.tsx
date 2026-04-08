@@ -174,9 +174,11 @@ export default function DeptROITab() {
     });
   };
 
+  const HIDDEN_DEPTS = ["株式会社スタジアム"];
+
   const sorted = useMemo(() => {
     if (!result) return [];
-    return [...result.departments].sort((a, b) => {
+    return [...result.departments].filter((d) => !HIDDEN_DEPTS.includes(d.department)).sort((a, b) => {
       const isOtherA = a.department === OTHER_LABEL || a.department === "その他";
       const isOtherB = b.department === OTHER_LABEL || b.department === "その他";
       if (isOtherA) return 1;
