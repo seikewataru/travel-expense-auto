@@ -4,16 +4,6 @@ import { useState, useMemo } from "react";
 import { type AggregateResponse } from "@/lib/api";
 import { usePersistedResult } from "@/lib/usePersistedResult";
 import YearMonthSelector from "./YearMonthSelector";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
 
 const CATEGORIES = [
   { key: "shinkansen", label: "新幹線" },
@@ -26,13 +16,6 @@ const CATEGORIES = [
 type CategoryKey = (typeof CATEGORIES)[number]["key"];
 type SortDir = "asc" | "desc";
 
-const MONTHS = [
-  { key: 1, label: "1月" },
-  { key: 2, label: "2月" },
-  { key: 3, label: "3月" },
-];
-
-const COLORS = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316", "#6366f1", "#14b8a6"];
 
 function yen(n: number) {
   return `¥${n.toLocaleString()}`;
@@ -122,21 +105,6 @@ export default function PersonTrendTab() {
     }
   };
 
-  // Top 8 for chart
-  const topPersons = useMemo(() => {
-    return [...rows].sort((a, b) => b.total - a.total).slice(0, 8);
-  }, [rows]);
-
-  const chartData = useMemo(() => {
-    return MONTHS.map((m) => {
-      const row: Record<string, string | number> = { month: m.label };
-      for (const p of topPersons) {
-        row[p.name] = p[`m${m.key}` as "m1" | "m2" | "m3"];
-      }
-      return row;
-    });
-  }, [topPersons]);
-
   const grandTotal = rows.reduce((s, r) => s + r.total, 0);
 
   const TABLE_COLS: { key: typeof sortCol; label: string; align: "left" | "right" }[] = [
@@ -180,27 +148,6 @@ export default function PersonTrendTab() {
           </span>
         </div>
       </div>
-
-      {/* グラフ: Top 8 推移 */}
-      {topPersons.length > 0 && (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
-          <p className="text-[11px] font-medium text-[var(--muted)] uppercase tracking-wider mb-4">
-            {CATEGORIES.find((c) => c.key === category)?.label} — 上位{topPersons.length}名の月別推移
-          </p>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: "var(--muted)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 10000).toFixed(0)}万`} />
-              <Tooltip formatter={(value) => yen(Number(value))} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {topPersons.map((p, i) => (
-                <Line key={p.name} type="monotone" dataKey={p.name} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
 
       {/* テーブル */}
       {sorted.length > 0 && (
