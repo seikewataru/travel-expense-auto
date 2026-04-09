@@ -6,6 +6,7 @@ import { usePersistedResult } from "@/lib/usePersistedResult";
 import YearMonthSelector from "./YearMonthSelector";
 
 const CATEGORIES = [
+  { key: "all", label: "合計" },
   { key: "shinkansen", label: "新幹線" },
   { key: "train", label: "在来線" },
   { key: "car", label: "車移動" },
@@ -23,7 +24,12 @@ function yen(n: number) {
 
 // PLベース: baseカテゴリのみ（_ad/_welfare等除外）
 // car + airplane は個別カテゴリとして扱う
+const BASE_KEYS = ["shinkansen", "train", "car", "airplane", "hotel"] as const;
+
 function getBaseValue(row: Record<string, unknown>, cat: CategoryKey): number {
+  if (cat === "all") {
+    return BASE_KEYS.reduce((s, k) => s + ((row[k] as number) || 0), 0);
+  }
   return (row[cat] as number) || 0;
 }
 
@@ -38,7 +44,7 @@ interface PersonRow {
 }
 
 export default function PersonTrendTab() {
-  const [category, setCategory] = useState<CategoryKey>("shinkansen");
+  const [category, setCategory] = useState<CategoryKey>("all");
   const [sortCol, setSortCol] = useState<"name" | "department" | "m1" | "m2" | "m3" | "total">("total");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
