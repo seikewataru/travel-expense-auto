@@ -5,6 +5,7 @@ import AggregateTab from "@/components/AggregateTab";
 import JournalTab from "@/components/JournalTab";
 import ROITab from "@/components/ROITab";
 import DeptROITab from "@/components/DeptROITab";
+import PersonTrendTab from "@/components/PersonTrendTab";
 
 const SECTIONS = [
   {
@@ -12,6 +13,7 @@ const SECTIONS = [
     tabs: [
       { key: "dept-roi", label: "部門別ROI" },
       { key: "aggregate", label: "個人別交通費" },
+      { key: "person-trend", label: "個人別推移" },
     ],
   },
   {
@@ -73,6 +75,7 @@ export default function Home() {
           {tab === "journal" && <JournalTab />}
           {tab === "roi" && <ROITab />}
           {tab === "dept-roi" && <DeptROITab />}
+          {tab === "person-trend" && <PersonTrendTab />}
         </div>
       </main>
     </div>
