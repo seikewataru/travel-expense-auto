@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import AggregateTab from "@/components/AggregateTab";
 import JournalTab from "@/components/JournalTab";
 import ROITab from "@/components/ROITab";
 import DeptROITab from "@/components/DeptROITab";
@@ -12,7 +11,6 @@ const SECTIONS = [
     label: "分析",
     tabs: [
       { key: "dept-roi", label: "部門別ROI" },
-      { key: "aggregate", label: "個人別交通費" },
       { key: "person-trend", label: "個人別推移" },
     ],
   },
@@ -71,7 +69,6 @@ export default function Home() {
       {/* メインコンテンツ */}
       <main className="flex-1 ml-[220px]">
         <div className="max-w-[1100px] mx-auto px-8 py-6">
-          {tab === "aggregate" && <AggregateTab />}
           {tab === "journal" && <JournalTab />}
           {tab === "roi" && <ROITab />}
           {tab === "dept-roi" && <DeptROITab />}
